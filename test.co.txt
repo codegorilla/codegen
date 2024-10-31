@@ -1,0 +1,28 @@
+var a: int = "hello world";
+
+val x: *int[5] = 1 + 2;
+
+def main (argc: int, argv: *char[1]) -> void {
+  var x: int = 1;
+  break;
+  continue;
+  ;
+
+  x + 1;
+
+  var x: int = if x < 1 then 1 else 0;
+
+  if;
+
+  while (x > 10) {
+    var x: int = 1;
+  }
+
+  return x + 1;
+}
+
+// This is a test
+
+/* This is another
+   test for sure. *** t **/
+var y: int = 2;

@@ -32,12 +32,16 @@ class Parser:
       match self.lookahead.kind:
         case 'DEF':
           n.add_child(self.functionDeclaration())
+        case 'STRUCT':
+          n.add_child(self.structureDeclaration())
+        case 'UNION':
+          n.add_child(self.unionDeclaration())
         case 'VAL':
           n.add_child(self.constantDeclaration())
         case 'VAR':
           n.add_child(self.variableDeclaration())
         case _:
-          print("ERROR")
+          print("error: invalid declaration")
     return n
 
   # DECLARATIONS
@@ -149,10 +153,57 @@ class Parser:
         print("ERROR - INVALID DECLARATION")
     return n
 
+  # Todo: Should we have one that is used in declaration context and
+  # another for use context? Declaration context needs to create a
+  # symbol table entry. Or do we just handle that in another pass?
+  def name (self) -> ast.AstNode:
+    n = ast.AstNode('Name')
+    n.set_token(self.lookahead)
+    self.match('IDENTIFIER')
+    return n
+
+  def structureDeclaration (self) -> ast.AstNode:
+    n = ast.AstNode('StructureDeclaration')
+    self.match('STRUCT')
+    n.add_child(self.name())
+    self.match('L_BRACE')
+    while self.lookahead.kind != 'R_BRACE':
+      n.add_child(self.structureMember())
+    self.match('R_BRACE')
+    return n
+
+  def structureMember (self) -> ast.AstNode:
+    n = ast.AstNode('StructureMember')
+    n.add_child(self.name())
+    self.match('COLON')
+    n.add_child(self.type())
+    self.match('SEMICOLON')
+    return n
+
+  def unionDeclaration (self) -> ast.AstNode:
+    n = ast.AstNode('unionDeclaration')
+    self.match('UNION')
+    n.add_child(self.name())
+    self.match('L_BRACE')
+    while self.lookahead.kind != 'R_BRACE':
+      n.add_child(self.unionMember())
+    self.match('R_BRACE')
+    return n
+
+  def unionMember (self) -> ast.AstNode:
+    n = ast.AstNode('UnionMember')
+    n.add_child(self.name())
+    self.match('COLON')
+    n.add_child(self.type())
+    self.match('SEMICOLON')
+    return n
+
+  # STATEMENTS
+
   def statement (self) -> ast.AstNode:
     n: ast.AstNode = None
     # Lookahead set for expression statements
-    lookaheadSet = [
+    firstSet = [
       'IDENTIFIER',
       'NULL',
       'FALSE',
@@ -167,30 +218,25 @@ class Parser:
         n = self.breakStatement()
       case 'CONTINUE':
         n = self.continueStatement()
+      case 'DO':
+        n = self.doStatement()
+      case 'FOR':
+        n = self.forStatement()
+      case 'IF':
+        n = self.ifStatement()
+      case 'LOOP':
+        n = self.loopStatement()
       case 'RETURN':
         n = self.returnStatement()
       case 'WHILE':
         n = self.whileStatement()
       case 'SEMICOLON':
         n = self.nullStatement()
-      case 'IF':
-        n = self.ifStatement()
-      case item if item in lookaheadSet:
+      case item if item in firstSet:
         n = self.expressionStatement()
       case _:
         print("ERROR - INVALID STATEMENT")
     return n
-
-  # Todo: Should we have one that is used in declaration context and
-  # another for use context? Declaration context needs to create a
-  # symbol table entry. Or do we just handle that in another pass?
-  def name (self) -> ast.AstNode:
-    n = ast.AstNode('Name')
-    n.set_token(self.lookahead)
-    self.match('IDENTIFIER')
-    return n
-
-  # STATEMENTS
 
   def breakStatement (self) -> ast.AstNode:
     n = ast.AstNode('BreakStatement')
@@ -204,16 +250,70 @@ class Parser:
     self.match('SEMICOLON')
     return n
 
+  def doStatement (self) -> ast.AstNode:
+    n = ast.AstNode('DoStatement')
+    self.match('DO')
+    self.match('WHILE')
+    self.match('L_PARENTHESIS')
+    n.add_child(self.expression())
+    self.match('R_PARENTHESIS')
+    if self.lookahead.kind == 'L_BRACE':
+      n.add_child(self.block())
+    else:
+      n.add_child(self.blockElement())
+    return n
+
   def expressionStatement (self) -> ast.AstNode:
     n = ast.AstNode('ExpressionStatement')
     n.add_child(self.expression())
     self.match('SEMICOLON')
     return n
 
+  def forStatement (self) -> ast.AstNode:
+    n = ast.AstNode('ForStatement')
+    self.match('FOR')
+    self.match('L_PARENTHESIS')
+    n.add_child(self.name())
+    self.match('IN')
+    n.add_child(self.expression())
+    self.match('R_PARENTHESIS')
+    if self.lookahead.kind == 'L_BRACE':
+      n.add_child(self.block())
+    else:
+      n.add_child(self.blockElement())
+    return n
+
   def ifStatement (self) -> ast.AstNode:
+    n = ast.AstNode('IfStatement')
     self.match('IF')
-    # Todo: Fill this in
-    self.match('SEMICOLON')
+    self.match('L_PARENTHESIS')
+    n.add_child(self.expression())
+    self.match('R_PARENTHESIS')
+    if self.lookahead.kind == 'L_BRACE':
+      n.add_child(self.block())
+    else:
+      n.add_child(self.blockElement())
+    return n
+
+  def loopStatement (self) -> ast.AstNode:
+    n = ast.AstNode('LoopStatement')
+    self.match('LOOP')
+    if self.lookahead.kind == 'L_PARENTHESIS':
+      self.match('L_PARENTHESIS')
+      # Init expression
+      n.add_child(self.expression())
+      self.match('SEMICOLON')
+      # Cond expression
+      n.add_child(self.expression())
+      self.match('SEMICOLON')
+      # Loop expression
+      n.add_child(self.expression())
+      self.match('R_PARENTHESIS')
+    if self.lookahead.kind == 'L_BRACE':
+      n.add_child(self.block())
+    else:
+      n.add_child(self.blockElement())
+    return n
 
   def nullStatement (self) -> ast.AstNode:
     # This is known as an "empty" statement in Java
@@ -248,7 +348,7 @@ class Parser:
   
   def assignmentExpression (self) -> ast.AstNode:
     n = self.logicalOrExpression()
-    lookaheadSet = [
+    firstSet = [
       'EQUAL',
       'ASTERISK_EQUAL',
       'SLASH_EQUAL',
@@ -258,15 +358,15 @@ class Parser:
       'LESS_LESS_EQUAL',
       'GREATER_GREATER_EQUAL',
       'AMPERSAND_EQUAL',
-      'CARAT_EQUAL',
+      'CARET_EQUAL',
       'BAR_EQUAL'
     ]
-    while self.lookahead.kind in lookaheadSet:
+    while self.lookahead.kind in firstSet:
       p = n
       n = ast.AstNode('BinaryExpression')
       n.set_token(self.lookahead)
       n.add_child(p)
-      self.match('EQUAL')
+      self.match(self.lookahead.kind)
       p = self.logicalOrExpression()
       n.add_child(p)
     return n
@@ -306,12 +406,12 @@ class Parser:
 
   def exclusiveOrExpression (self) -> ast.AstNode:
     n = self.andExpression()
-    while self.lookahead.kind == 'CARAT':
+    while self.lookahead.kind == 'CARET':
       p = n
       n = ast.AstNode('BinaryExpression')
       n.set_token(self.lookahead)
       n.add_child(p)
-      self.match('CARAT')
+      self.match('CARET')
       n.add_child(self.andExpression())
     return n
   
@@ -328,8 +428,8 @@ class Parser:
 
   def equalityExpression (self) -> ast.AstNode:
     n = self.relationalExpression()
-    lookaheadSet = ['EQUAL_EQUAL', 'EXCLAMATION_EQUAL']
-    while self.lookahead.kind in lookaheadSet:
+    firstSet = ['EQUAL_EQUAL', 'EXCLAMATION_EQUAL']
+    while self.lookahead.kind in firstSet:
       p = n
       n = ast.AstNode('BinaryExpression')
       n.set_token(self.lookahead)
@@ -340,8 +440,8 @@ class Parser:
 
   def relationalExpression (self) -> ast.AstNode:
     n = self.shiftExpression()
-    lookaheadSet = ['GREATER', 'LESS', 'GREATER_EQUAL', 'LESS_EQUAL']
-    while self.lookahead.kind in lookaheadSet:
+    firstSet = ['GREATER', 'LESS', 'GREATER_EQUAL', 'LESS_EQUAL']
+    while self.lookahead.kind in firstSet:
       p = n
       n = ast.AstNode('BinaryExpression')
       n.set_token(self.lookahead)
@@ -352,8 +452,8 @@ class Parser:
 
   def shiftExpression (self) -> ast.AstNode:
     n = self.additiveExpression()
-    lookaheadSet = ['GREATER_GREATER', 'LESS_LESS']
-    while self.lookahead.kind in lookaheadSet:
+    firstSet = ['GREATER_GREATER', 'LESS_LESS']
+    while self.lookahead.kind in firstSet:
       p = n
       n = ast.AstNode('BinaryExpression')
       n.set_token(self.lookahead)
@@ -364,8 +464,8 @@ class Parser:
 
   def additiveExpression (self) -> ast.AstNode:
     n = self.multiplicativeExpression()
-    lookaheadSet = ['PLUS', 'MINUS']
-    while self.lookahead.kind in lookaheadSet:
+    firstSet = ['PLUS', 'MINUS']
+    while self.lookahead.kind in firstSet:
       p = n
       n = ast.AstNode('BinaryExpression')
       n.set_token(self.lookahead)
@@ -376,8 +476,8 @@ class Parser:
 
   def multiplicativeExpression (self) -> ast.AstNode:
     n = self.unaryExpression()
-    lookaheadSet = ['ASTERISK', 'SLASH', 'PERCENT']
-    while self.lookahead.kind in lookaheadSet:
+    firstSet = ['ASTERISK', 'SLASH', 'PERCENT']
+    while self.lookahead.kind in firstSet:
       p = n
       n = ast.AstNode('BinaryExpression')
       n.set_token(self.lookahead)
@@ -387,8 +487,8 @@ class Parser:
     return n
   
   def unaryExpression (self) -> ast.AstNode:
-    lookaheadSet = ['MINUS', 'EXCLAMATION']
-    if self.lookahead.kind in lookaheadSet:
+    firstSet = ['ASTERISK', 'MINUS', 'EXCLAMATION']
+    if self.lookahead.kind in firstSet:
       n = ast.AstNode('UnaryExpression')
       n.set_token(self.lookahead)
       self.match(self.lookahead.kind)
@@ -399,25 +499,74 @@ class Parser:
 
   def primaryExpression (self) -> ast.AstNode:
     # Todo: Do we need to distinguish between different integer literal types?
-    literals = ['NULL', 'FALSE', 'THIS', 'TRUE', 'INT', 'INT32', 'FLOATING', 'STRING_LITERAL']
+    firstSet = ['NULL', 'FALSE', 'THIS', 'TRUE', 'INT', 'INT32', 'FLOATING', 'STRING_LITERAL']
     match self.lookahead.kind:
       case 'IDENTIFIER':
-        n = self.identifier()
+        n = self.nameExpression()
       case 'IF':
         n = self.ifExpression()
       case 'L_PARENTHESIS':
         n = self.parenthesizedExpression()
       # Should be integer literals to dis-ambiguate from type names
-      case item if item in literals:
+      case item if item in firstSet:
         n = self.literal()
       case _:
         print("ERROR - INVALID PRIMARY EXPRESSION")
     return n
-  
-  def identifier (self) -> ast.AstNode:
-    n = ast.AstNode('Identifier')
-    n.set_token(self.lookahead)
-    self.match('IDENTIFIER')
+
+  def nameExpression (self) -> ast.AstNode:
+    n = self.name()
+    firstSet = ['L_PARENTHESIS', 'L_BRACKET', 'MINUS_GREATER', 'PERIOD']
+    while self.lookahead.kind in firstSet:
+      p = n
+      match self.lookahead.kind:
+        case 'L_PARENTHESIS':
+          n = self.functionCall(p)
+        case 'L_BRACKET':
+          n = self.arrayAccess(p)
+        case 'MINUS_GREATER':
+          n = self.derefAccess(p)
+        case 'PERIOD':
+          n = self.fieldAccess(p)
+    return n
+
+  def functionCall (self, p: ast.AstNode) -> ast.AstNode:
+    n = ast.AstNode('FunctionCall')
+    n.add_child(p)
+    n.add_child(self.argumentList())
+    return n
+
+  def argumentList (self) -> ast.AstNode:
+    n = ast.AstNode('ArgumentList')
+    self.match('L_PARENTHESIS')
+    if self.lookahead.kind != 'R_PARENTHESIS':
+      n.add_child(self.expression())
+      while self.lookahead.kind == 'COMMA':
+        self.match('COMMA')
+        n.add_child(self.expression())
+    self.match('R_PARENTHESIS')
+    return n
+
+  def arrayAccess (self, p: ast.AstNode) -> ast.AstNode:
+    n = ast.AstNode('ArrayAccess')
+    n.add_child(p)
+    self.match('L_BRACKET')
+    n.add_child(self.expression())
+    self.match('R_BRACKET')
+    return n
+
+  def derefAccess (self, p: ast.AstNode) -> ast.AstNode:
+    n = ast.AstNode('FieldAccess')
+    n.add_child(p)
+    self.match('MINUS_GREATER')
+    n.add_child(self.name())
+    return n
+
+  def fieldAccess (self, p: ast.AstNode) -> ast.AstNode:
+    n = ast.AstNode('FieldAccess')
+    n.add_child(p)
+    self.match('PERIOD')
+    n.add_child(self.name())
     return n
 
   def ifExpression (self) -> ast.AstNode:
@@ -439,6 +588,18 @@ class Parser:
     self.match('L_PARENTHESIS')
     n = self.expression()
     self.match('R_PARENTHESIS')
+    firstSet = ['L_PARENTHESIS', 'L_BRACKET', 'MINUS_GREATER', 'PERIOD']
+    while self.lookahead.kind in firstSet:
+      p = n
+      match self.lookahead.kind:
+        case 'L_PARENTHESIS':
+          n = self.functionCall(p)
+        case 'L_BRACKET':
+          n = self.arrayAccess(p)
+        case 'MINUS_GREATER':
+          n = self.derefAccess(p)
+        case 'PERIOD':
+          n = self.fieldAccess(p)
     return n
 
   def literal (self) -> ast.AstNode:
@@ -502,11 +663,11 @@ class Parser:
       case 'FN':
         n = self.functionType()
         center.append(n)
-      case 'VOID' | 'BOOL' | 'CHAR' | 'INT' | 'INT32' | 'FLOAT':
+      case 'VOID' | 'BOOL' | 'CHAR' | 'INT' | 'INT32' | 'FLOAT' | 'DOUBLE':
         # Primitive type, need to generalize eventually
         n = self.primitiveType()
         center.append(n)
-      case 'ID':
+      case 'IDENTIFIER':
         # Nominal type. Need to look up name in symbol table to tell
         # what kind it is (e.g. struct, class). For now assume class.
         n = self.classType()
@@ -538,7 +699,7 @@ class Parser:
 
   def classType (self) -> ast.AstNode:
     n = ast.AstNode()
-    if self.lookahead.type == 'IDENTIFIER':
+    if self.lookahead.kind == 'IDENTIFIER':
       n.add_child(self.name())
     else:
       self.error('ID')
@@ -550,11 +711,11 @@ class Parser:
     self.match('FN')
     n = ast.AstNode('FunctionType')
     self.match('L_PARENTHESIS')
-    if self.lookahead.type != 'R_PARENTHESIS':
+    if self.lookahead.kind != 'R_PARENTHESIS':
       # Parameter types
       p = self.type()
       n.add_child(p)
-      while self.lookahead.type == 'COMMA':
+      while self.lookahead.kind == 'COMMA':
         self.match('COMMA')
         p = self.type()
         n.add_child(p)
@@ -585,6 +746,8 @@ class Parser:
         n = self.int32Type()
       case 'FLOAT':
         n = self.floatType()
+      case 'DOUBLE':
+        n = self.doubleType()
     return n
 
   def voidType (self) -> ast.AstNode:
@@ -621,4 +784,10 @@ class Parser:
     n = ast.AstNode('FloatType')
     n.set_token(self.lookahead)
     self.match('FLOAT')
+    return n
+
+  def doubleType (self) -> ast.AstNode:
+    n = ast.AstNode('DoubleType')
+    n.set_token(self.lookahead)
+    self.match('DOUBLE')
     return n

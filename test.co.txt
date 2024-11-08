@@ -1,6 +1,19 @@
 var a: int = "hello world";
 
+var b: Waypoint;
+
 val x: *int[5] = 1 + 2;
+
+struct Waypoint {
+  x: int;
+  y: float;
+}
+
+union Value {
+  i: int;
+  f: float;
+  d: double;
+}
 
 def main (argc: int, argv: *char[1]) -> void {
   var x: int = 1;
@@ -8,14 +21,31 @@ def main (argc: int, argv: *char[1]) -> void {
   continue;
   ;
 
-  x + 1;
+  x = t.f->z[1];
+
+  y = t(2, 1);
+
+  z = (*f).x;
 
   var x: int = if x < 1 then 1 else 0;
 
-  if;
+  if (x == 10)
+    var x: int = 5;
 
-  while (x > 10) {
+  do while (x > 10) {
     var x: int = 1;
+  }
+
+  for (i in list) {
+    x = 1;
+  }
+
+  loop {
+    x = 1;
+  }
+
+  loop (i=0; i<10; i+=1) {
+    x = x + 2;
   }
 
   return x + 1;

@@ -78,13 +78,19 @@ keyword_lookup = {
   'end': 'END',
   'enum': 'ENUM',
   'extends': 'EXTENDS',
+  'false': 'FALSE',
   'for': 'FOR',
   'foreach': 'FOREACH',
   'fun': 'FUN',
   'if': 'IF',
+  'in': 'IN',
+  'loop': 'LOOP',
   'or': 'OR',
   'return': 'RETURN',
+  'struct': 'STRUCT',
   'then': 'THEN',
+  'true': 'TRUE',
+  'union': 'UNION',
   'val': 'VAL',
   'var': 'VAR',
   'while': 'WHILE',
@@ -173,9 +179,9 @@ class Lexer:
           self.consume()
           if self.current == '=':
             self.consume()
-            return reader.Token('CARAT_EQUAL', '^=', self.line, self.column)
+            return reader.Token('CARET_EQUAL', '^=', self.line, self.column)
           else:
-            return reader.Token('CARAT', '^', self.line, self.column)
+            return reader.Token('CARET', '^', self.line, self.column)
 
         case '&':
           self.consume()

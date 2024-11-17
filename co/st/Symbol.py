@@ -1,4 +1,5 @@
-from co import st
+
+# Root of symbol class hierarchy
 
 class Symbol:
 

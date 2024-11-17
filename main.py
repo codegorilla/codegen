@@ -7,6 +7,7 @@ from co import reader
 from co import st
 from co import ast
 from co import types
+from co.st import Scope
 
 
 # Load input from file
@@ -26,26 +27,14 @@ lexer.setInput(content)
 
 # t = lexer.getToken()
 # print(t)
-# t = lexer.getToken()
-# print(t)
-# t = lexer.getToken()
-# print(t)
-# t = lexer.getToken()
-# print(t)
-# t = lexer.getToken()
-# print(t)
-# t = lexer.getToken()
-# print(t)
-# t = lexer.getToken()
-# print(t)
-# t = lexer.getToken()
-# print(t)
-# t = lexer.getToken()
-# print(t)
 
 # Create parser
 parser = reader.Parser()
 parser.setInput(lexer)
 root = parser.translationUnit()
 
+pass1 = reader.Pass1()
+pass1.translationUnit(root)
 
+pass2 = reader.Pass2()
+pass2.translationUnit(root)

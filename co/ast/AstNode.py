@@ -3,34 +3,36 @@ from co.reader import Token
 
 class AstNode:
 
-  def __init__ (self, kind='None'):
-    self._children: List['AstNode'] = []
-    self._token = None
-    self._kind = kind
+  def __init__ (self, kind: str = 'None'):
+    self.kind = kind
+    self.children: List['AstNode'] = []
+    self.token = None
+    self.attributes: dict = {}
 
   def __repr__ (self):
-    return f"AstNode({self._kind},{self._token})"
+    return f"AstNode({self.kind},{self.token})"
 
-  def get_token (self):
-    return self._token
+  def child (self, index: int = 0) -> 'AstNode':
+    return self.children[index]
 
-  def get_child (self, index: int) -> 'AstNode':
-    return self._children[index]
-
-  def get_child_count (self) -> int:
-    return len(self._children)
-
-  def get_children (self) -> List['AstNode']:
-    return self._children
-
-  def get_kind (self) -> str:
-    return self._kind
+  def child_count (self) -> int:
+    return len(self.children)
 
   def add_child (self, node: 'AstNode'):
-    self._children.append(node)
+    self.children.append(node)
+
+  def set_kind (self, kind: str):
+    self.kind = kind
 
   def set_token (self, token: Token):
-    self._token = token
+    self.token = token
 
-  def accept (self, visitor):
-    visitor.visit(self)
+  def attribute (self, name: str):
+    return self.attributes[name]
+
+  def set_attribute (self, name: str, value):
+    self.attributes[name] = value
+
+
+  # def accept (self, visitor):
+  #   visitor.visit(self)

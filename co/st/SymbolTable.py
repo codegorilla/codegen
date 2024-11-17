@@ -1,16 +1,12 @@
-from co import st
+from co.st.Symbol import Symbol
 
 class SymbolTable:
 
   def __init__ (self):
-    self.table: dict[str, st.Symbol] = {}
-    self.enclosingScope: 'SymbolTable' = None
+    self.data: dict[str, Symbol] = {}
 
-  def define (self, symbol: st.Symbol):
-    self.table[symbol.name] = symbol
+  def insert (self, symbol: Symbol):
+    self.data[symbol.name] = symbol
 
-  def lookup (self, name: str) -> st.Symbol:
-    return self.table[name]
-
-  def setEnclosingScope (self, scope: 'SymbolTable'):
-    self.enclosingScope = scope
+  def lookup (self, name: str) -> Symbol:
+    return self.data.get(name)

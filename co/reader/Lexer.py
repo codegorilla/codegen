@@ -111,7 +111,7 @@ class Lexer:
     self.position: int = 0
     self.start: int = 0
     self.end: int = 0
-    self.line: int = 0
+    self.line: int = 1
     self.column: int = 0
 
   def setInput (self, input: str):

@@ -4,8 +4,7 @@ from collections import deque
 
 from co import ast
 from co import reader
-
-#from co.ply import lex
+from co import st
 
 class Parser:
 
@@ -30,6 +29,8 @@ class Parser:
     n = ast.AstNode('TranslationUnit')
     while self.lookahead.kind != 'EOF':
       match self.lookahead.kind:
+        case 'CLASS':
+          n.add_child(self.classDeclaration())
         case 'DEF':
           n.add_child(self.functionDeclaration())
         case 'STRUCT':
@@ -46,22 +47,52 @@ class Parser:
 
   # DECLARATIONS
 
+  def classDeclaration (self) -> ast.AstNode:
+    n = ast.AstNode('ClassDeclaration')
+    self.match('CLASS')
+    n.add_child(self.name())
+    self.match('L_BRACE')
+    while self.lookahead.kind != 'R_BRACE':
+      n.add_child(self.classMember())
+    self.match('R_BRACE')
+    return n
+
+  def classMember (self) -> ast.AstNode:
+    pass
+    # match self.lookahead.kind:
+    #   case 'DEF':
+    #     n = self.methodDeclaration()
+    #   case 'VAL':
+    #     n = self.memberVariableDeclaration()
+    #   case 'VAR':
+    #     n = self.memberConstantDeclaration()
+    #   case _:
+    #     pass
+    # return n
+
   def constantDeclaration (self) -> ast.AstNode:
     n = ast.AstNode('ConstantDeclaration')
     self.match('VAL')
     if self.lookahead.kind == 'IDENTIFIER':
       n.add_child(self.name())
     else:
-      self.error('ID')
+      self.error('IDENTIFIER')
     # Optional type specifier
     if self.lookahead.kind == 'COLON':
       self.match('COLON')
       n.add_child(self.type())
+    else:
+      # Insert a "delta" (don't know) type
+      n.add_child(ast.AstNode('DeltaType'))
+    # Required initializer
     if self.lookahead.kind == 'EQUAL':
       self.match('EQUAL')
       # Todo: Are there restrictions on what this expression can be?
-      # Does it have to be a compile-time constant?
+      # Does it have to be a compile-time constant? (In C it does,
+      # but in C++ it doesn't.)
       n.add_child(self.expression())
+    else:
+      print("Error - missing initializer in constant definition")
     self.match('SEMICOLON')
     return n
   
@@ -71,11 +102,14 @@ class Parser:
     if self.lookahead.kind == 'IDENTIFIER':
       n.add_child(self.name())
     else:
-      self.error('ID')
+      self.error('IDENTIFIER')
     # Optional type specifier
     if self.lookahead.kind == 'COLON':
       self.match('COLON')
       n.add_child(self.type())
+    else:
+      # Insert a "delta" (don't know) type
+      n.add_child(ast.AstNode('DeltaType'))
     # Optional initializer
     if self.lookahead.kind == 'EQUAL':
       self.match('EQUAL')
@@ -123,7 +157,19 @@ class Parser:
     if self.lookahead.kind == 'SEMICOLON':
       self.match('SEMICOLON')
     else:
-      n.add_child(self.block())
+      n.add_child(self.topBlock())
+    return n
+
+  # A top block is a special kind of block that does not create its
+  # own scope. It simply uses the scope created by the function, and
+  # is the same as a block in every other way.
+
+  def topBlock (self) -> ast.AstNode:
+    n = ast.AstNode('TopBlock')
+    self.match('L_BRACE')
+    while self.lookahead.kind != 'R_BRACE':
+      n.add_child(self.blockElement())
+    self.match('R_BRACE')
     return n
 
   def block (self) -> ast.AstNode:
@@ -166,6 +212,11 @@ class Parser:
     n = ast.AstNode('StructureDeclaration')
     self.match('STRUCT')
     n.add_child(self.name())
+    n.add_child(self.structureBody())
+    return n
+
+  def structureBody (self) -> ast.AstNode:
+    n = ast.AstNode('StructureBody')
     self.match('L_BRACE')
     while self.lookahead.kind != 'R_BRACE':
       n.add_child(self.structureMember())
@@ -181,9 +232,14 @@ class Parser:
     return n
 
   def unionDeclaration (self) -> ast.AstNode:
-    n = ast.AstNode('unionDeclaration')
+    n = ast.AstNode('UnionDeclaration')
     self.match('UNION')
     n.add_child(self.name())
+    n.add_child(self.unionBody())
+    return n
+
+  def unionBody (self) -> ast.AstNode:
+    n = ast.AstNode('UnionBody')
     self.match('L_BRACE')
     while self.lookahead.kind != 'R_BRACE':
       n.add_child(self.unionMember())
@@ -203,7 +259,7 @@ class Parser:
   def statement (self) -> ast.AstNode:
     n: ast.AstNode = None
     # Lookahead set for expression statements
-    firstSet = [
+    expressionFirstSet = [
       'IDENTIFIER',
       'NULL',
       'FALSE',
@@ -212,6 +268,10 @@ class Parser:
       'INT',
       'INT32',
       'FLOATING'
+    ]
+    declarationFirstSet = [
+      'VAL',
+      'VAR'
     ]
     match self.lookahead.kind:
       case 'BREAK':
@@ -232,7 +292,9 @@ class Parser:
         n = self.whileStatement()
       case 'SEMICOLON':
         n = self.nullStatement()
-      case item if item in firstSet:
+      case item if item in declarationFirstSet:
+        n = self.declarationStatement()
+      case item if item in expressionFirstSet:
         n = self.expressionStatement()
       case _:
         print("ERROR - INVALID STATEMENT")
@@ -262,6 +324,13 @@ class Parser:
     else:
       n.add_child(self.blockElement())
     return n
+
+  def declarationStatement (self) -> ast.AstNode:
+    n = ast.AstNode('DeclarationStatement')
+    if self.lookahead == 'VAL':
+      n.add_child(self.constantDeclaration())
+    elif self.lookahead == 'VAR':
+      n.add_child(self.variableDeclaration())
 
   def expressionStatement (self) -> ast.AstNode:
     n = ast.AstNode('ExpressionStatement')
@@ -487,6 +556,7 @@ class Parser:
     return n
   
   def unaryExpression (self) -> ast.AstNode:
+    # Need to add tilde
     firstSet = ['ASTERISK', 'MINUS', 'EXCLAMATION']
     if self.lookahead.kind in firstSet:
       n = ast.AstNode('UnaryExpression')
@@ -499,7 +569,19 @@ class Parser:
 
   def primaryExpression (self) -> ast.AstNode:
     # Todo: Do we need to distinguish between different integer literal types?
-    firstSet = ['NULL', 'FALSE', 'THIS', 'TRUE', 'INT', 'INT32', 'FLOATING', 'STRING_LITERAL']
+    firstSet = [
+      'NULL',
+      'THIS',
+      'FALSE',
+      'TRUE',
+      'FLOAT',
+      'FLOAT32',
+      'FLOAT64',
+      'INT',
+      'INT32',
+      'INT64',
+      'STRING_LITERAL'
+    ]
     match self.lookahead.kind:
       case 'IDENTIFIER':
         n = self.nameExpression()
@@ -620,10 +702,18 @@ class Parser:
         n = ast.AstNode('IntegerLiteral')
         n.set_token(self.lookahead)
         self.match('INT32')
-      case 'FLOATING':
-        n = ast.AstNode('FloatingLiteral')
+      case 'FLOAT':
+        n = ast.AstNode('FloatLiteral')
         n.set_token(self.lookahead)
-        self.match('FLOATING')
+        self.match('FLOAT')
+      case 'FLOAT32':
+        n = ast.AstNode('Float32Literal')
+        n.set_token(self.lookahead)
+        self.match('FLOAT32')
+      case 'FLOAT64':
+        n = ast.AstNode('Float64Literal')
+        n.set_token(self.lookahead)
+        self.match('FLOAT64')
       case 'STRING_LITERAL':
         n = ast.AstNode('StringLiteral')
         n.set_token(self.lookahead)
@@ -642,7 +732,7 @@ class Parser:
     # and arrays as we go. When done, the deque should be empty.    
     while len(combined) > 0:
       p = combined.pop()
-      match p.get_kind():
+      match p.kind:
         case 'PointerType':
           p.add_child(n)
           n = p
@@ -698,7 +788,7 @@ class Parser:
     return n
 
   def classType (self) -> ast.AstNode:
-    n = ast.AstNode()
+    n = ast.AstNode('ClassType')
     if self.lookahead.kind == 'IDENTIFIER':
       n.add_child(self.name())
     else:

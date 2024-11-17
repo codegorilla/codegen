@@ -1,0 +1,60 @@
+var a: int = "hello world";
+
+var b: Waypoint;
+
+val z: *int[5] = 1 + 2;
+
+struct Waypoint {
+  x: int;
+  y: float;
+}
+
+class Widget { }
+
+union Value {
+  i: int;
+  f: float;
+  d: double;
+}
+
+def main (argc: int, argv: *char[1]) -> void {
+  var x: int = 1;
+  break;
+  continue;
+  ;
+
+  x = t.f->z[1];
+
+  y = t(2, 1);
+
+  z = (*f).x;
+
+  var x: int = if x < 1 then 1 else 0;
+
+  if (x == 10)
+    var x: int = 5;
+
+  do while (x > 10) {
+    var x: int = 1;
+  }
+
+  for (i in list) {
+    x = 1;
+  }
+
+  loop {
+    x = 1;
+  }
+
+  loop (i=0; i<10; i+=1) {
+    x = x + 2;
+  }
+
+  return x + 1;
+}
+
+// This is a test
+
+/* This is another
+   test for sure. *** t **/
+var y: int = 2;

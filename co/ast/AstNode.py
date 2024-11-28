@@ -21,6 +21,9 @@ class AstNode:
   def add_child (self, node: 'AstNode'):
     self.children.append(node)
 
+  def set_child (self, index: int, node: 'AstNode'):
+    self.children[index] = node
+
   def set_kind (self, kind: str):
     self.kind = kind
 

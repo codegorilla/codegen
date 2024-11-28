@@ -9,7 +9,7 @@ from co import st
 class Parser:
 
   def __init__ (self):
-    self.primitiveList = ['VOID', 'BOOL', 'CHAR', 'SHORT', 'INT', 'LONG', 'FLOAT','DOUBLE']
+    pass
 
   def setInput(self, input: reader.Lexer):
     self.input: reader.Lexer = input
@@ -20,6 +20,7 @@ class Parser:
       self.consume()
     else:
       msg = f"Invalid token. Expected {kind}, got {self.lookahead.kind}."
+      # Should this really be an exception, or should we do sync recovery?
       raise Exception(msg)
 
   def consume (self):
@@ -28,24 +29,31 @@ class Parser:
   def translationUnit (self) -> ast.AstNode:
     n = ast.AstNode('TranslationUnit')
     while self.lookahead.kind != 'EOF':
-      match self.lookahead.kind:
-        case 'CLASS':
-          n.add_child(self.classDeclaration())
-        case 'DEF':
-          n.add_child(self.functionDeclaration())
-        case 'STRUCT':
-          n.add_child(self.structureDeclaration())
-        case 'UNION':
-          n.add_child(self.unionDeclaration())
-        case 'VAL':
-          n.add_child(self.constantDeclaration())
-        case 'VAR':
-          n.add_child(self.variableDeclaration())
-        case _:
-          print("error: invalid declaration")
+      n.add_child(self.declaration())
     return n
 
   # DECLARATIONS
+
+  def declaration (self) -> ast.AstNode:
+    match self.lookahead.kind:
+      case 'CLASS':
+        n = self.classDeclaration()
+      case 'DEF':
+        n = self.functionDeclaration()
+      case 'STRUCT':
+        n = self.structureDeclaration()
+      case 'TYPEALIAS':
+        n = self.typealiasDeclaration()
+      case 'UNION':
+        n = self.unionDeclaration()
+      case 'VAL':
+        n = self.constantDeclaration()
+      case 'VAR':
+        n = self.variableDeclaration()
+      case _:
+        # Replace with exception
+        print("error: invalid declaration" + self.lookahead.kind)
+    return n
 
   def classDeclaration (self) -> ast.AstNode:
     n = ast.AstNode('ClassDeclaration')
@@ -83,7 +91,8 @@ class Parser:
       n.add_child(self.type())
     else:
       # Insert a "delta" (don't know) type
-      n.add_child(ast.AstNode('DeltaType'))
+      # n.add_child(ast.AstNode('DeltaType'))
+      n.add_child(None)
     # Required initializer
     if self.lookahead.kind == 'EQUAL':
       self.match('EQUAL')
@@ -108,12 +117,13 @@ class Parser:
       self.match('COLON')
       n.add_child(self.type())
     else:
-      # Insert a "delta" (don't know) type
-      n.add_child(ast.AstNode('DeltaType'))
+      n.add_child(None)
     # Optional initializer
     if self.lookahead.kind == 'EQUAL':
       self.match('EQUAL')
       n.add_child(self.expression())
+    else:
+      n.add_child(None)
     self.match('SEMICOLON')
     return n
 
@@ -168,6 +178,8 @@ class Parser:
     n = ast.AstNode('TopBlock')
     self.match('L_BRACE')
     while self.lookahead.kind != 'R_BRACE':
+      # Blocks only contain statements? If so, then we can get rid of
+      # blockElement
       n.add_child(self.blockElement())
     self.match('R_BRACE')
     return n
@@ -176,27 +188,14 @@ class Parser:
     n = ast.AstNode('Block')
     self.match('L_BRACE')
     while self.lookahead.kind != 'R_BRACE':
+      # Blocks only contain statements? If so, then we can get rid of
+      # blockElement
       n.add_child(self.blockElement())
     self.match('R_BRACE')
     return n
 
   def blockElement (self) -> ast.AstNode:
-    n: ast.AstNode = None
-    if self.lookahead.kind in ['VAL', 'VAR']:
-      n = self.declaration()
-    else:
-      n = self.statement()
-    return n
-
-  def declaration (self) -> ast.AstNode:
-    n: ast.AstNode = None
-    match self.lookahead.kind:
-      case 'VAL':
-        n = self.constantDeclaration()
-      case 'VAR':
-        n = self.variableDeclaration()
-      case _:
-        print("ERROR - INVALID DECLARATION")
+    n = self.statement()
     return n
 
   # Todo: Should we have one that is used in declaration context and
@@ -227,6 +226,15 @@ class Parser:
     n = ast.AstNode('StructureMember')
     n.add_child(self.name())
     self.match('COLON')
+    n.add_child(self.type())
+    self.match('SEMICOLON')
+    return n
+
+  def typealiasDeclaration (self) -> ast.AstNode:
+    n = ast.AstNode('TypealiasDeclaration')
+    self.match('TYPEALIAS')
+    n.add_child(self.name())
+    self.match('EQUAL')
     n.add_child(self.type())
     self.match('SEMICOLON')
     return n
@@ -265,9 +273,12 @@ class Parser:
       'FALSE',
       'THIS',
       'TRUE',
-      'INT',
-      'INT32',
-      'FLOATING'
+      'INT32_LITERAL',
+      'INT64_LITERAL',
+      'UINT32_LITERAL',
+      'UINT64_LITERAL',
+      'FLOAT32_LITERAL',
+      'FLOAT64_LITERAL'
     ]
     declarationFirstSet = [
       'VAL',
@@ -327,10 +338,11 @@ class Parser:
 
   def declarationStatement (self) -> ast.AstNode:
     n = ast.AstNode('DeclarationStatement')
-    if self.lookahead == 'VAL':
+    if self.lookahead.kind == 'VAL':
       n.add_child(self.constantDeclaration())
-    elif self.lookahead == 'VAR':
+    elif self.lookahead.kind == 'VAR':
       n.add_child(self.variableDeclaration())
+    return n
 
   def expressionStatement (self) -> ast.AstNode:
     n = ast.AstNode('ExpressionStatement')
@@ -568,18 +580,17 @@ class Parser:
     return n
 
   def primaryExpression (self) -> ast.AstNode:
-    # Todo: Do we need to distinguish between different integer literal types?
     firstSet = [
       'NULL',
       'THIS',
       'FALSE',
       'TRUE',
-      'FLOAT',
-      'FLOAT32',
-      'FLOAT64',
-      'INT',
-      'INT32',
-      'INT64',
+      'FLOAT32_LITERAL',
+      'FLOAT64_LITERAL',
+      'INT32_LITERAL',
+      'INT64_LITERAL',
+      'UINT32_LITERAL',
+      'UINT64_LITERAL',
       'STRING_LITERAL'
     ]
     match self.lookahead.kind:
@@ -698,22 +709,30 @@ class Parser:
         n = ast.AstNode('BooleanLiteral')
         n.set_token(self.lookahead)
         self.match('TRUE')
-      case 'INT32':
+      case 'FLOAT32_LITERAL':
+        n = ast.AstNode('FloatingPointLiteral')
+        n.set_token(self.lookahead)
+        self.match('FLOAT32_LITERAL')
+      case 'FLOAT64_LITERAL':
+        n = ast.AstNode('FloatingPointLiteral')
+        n.set_token(self.lookahead)
+        self.match('FLOAT64_LITERAL')
+      case 'INT32_LITERAL':
         n = ast.AstNode('IntegerLiteral')
         n.set_token(self.lookahead)
-        self.match('INT32')
-      case 'FLOAT':
-        n = ast.AstNode('FloatLiteral')
+        self.match('INT32_LITERAL')
+      case 'INT64_LITERAL':
+        n = ast.AstNode('IntegerLiteral')
         n.set_token(self.lookahead)
-        self.match('FLOAT')
-      case 'FLOAT32':
-        n = ast.AstNode('Float32Literal')
+        self.match('INT64_LITERAL')
+      case 'UINT32_LITERAL':
+        n = ast.AstNode('IntegerLiteral')
         n.set_token(self.lookahead)
-        self.match('FLOAT32')
-      case 'FLOAT64':
-        n = ast.AstNode('Float64Literal')
+        self.match('UINT32_LITERAL')
+      case 'UINT64_LITERAL':
+        n = ast.AstNode('IntegerLiteral')
         n.set_token(self.lookahead)
-        self.match('FLOAT64')
+        self.match('UINT64_LITERAL')
       case 'STRING_LITERAL':
         n = ast.AstNode('StringLiteral')
         n.set_token(self.lookahead)
@@ -741,6 +760,9 @@ class Parser:
           n = p
     return n
 
+  # For primitives, we could just say primitive type and let later
+  # pass figure out actual type from token.
+
   def directType (self) -> deque:
     # Build left fragment
     left = deque()
@@ -753,14 +775,30 @@ class Parser:
       case 'FN':
         n = self.functionType()
         center.append(n)
-      case 'VOID' | 'BOOL' | 'CHAR' | 'INT' | 'INT32' | 'FLOAT' | 'DOUBLE':
-        # Primitive type, need to generalize eventually
+      # To do: void might not be a primitive type - verify
+      case kind if kind in [
+        'BOOL',
+        'INT8',
+        'INT16',
+        'INT32',
+        'INT64',
+        'UINT8',
+        'UINT16',
+        'UINT32',
+        'UINT64',
+        'FLOAT32',
+        'FLOAT64',
+        'VOID'
+      ]:
         n = self.primitiveType()
         center.append(n)
       case 'IDENTIFIER':
         # Nominal type. Need to look up name in symbol table to tell
         # what kind it is (e.g. struct, class). For now assume class.
-        n = self.classType()
+        # What if we don't want to require a symbol table for
+        # parsing? In this case, all we can say is that it is a
+        # 'nominal' type.
+        n = self.nominalType()
         center.append(n)
       case 'L_PARENTHESIS':
         self.match('L_PARENTHESIS')
@@ -787,14 +825,17 @@ class Parser:
     self.match('R_BRACKET')
     return n
 
-  def classType (self) -> ast.AstNode:
-    n = ast.AstNode('ClassType')
-    if self.lookahead.kind == 'IDENTIFIER':
-      n.add_child(self.name())
-    else:
-      self.error('ID')
-    # Need to eventually allow for type parameters
-    return n
+  # def classType (self) -> ast.AstNode:
+  #   n = ast.AstNode('ClassType')
+  #   if self.lookahead.kind == 'IDENTIFIER':
+  #     n.add_child(self.name())
+  #   else:
+  #     self.error('ID')
+  #   # Need to eventually allow for type parameters. (This would
+  #   # allow us to know that this was a class type, if that matters.)
+  #   # Need to eventually allow for type parameters. (This would allow
+  #   # us to know that this was a class type, if that matters.)
+  #   return n
 
   def functionType (self) -> ast.AstNode:
     # Fix parameters
@@ -816,6 +857,17 @@ class Parser:
     n.add_child(p)
     return n
 
+  def nominalType (self) -> ast.AstNode:
+    n = ast.AstNode('NominalType')
+    # I don't think we want to add a name here, we want to set the
+    # token instead, but we can revisit this later.
+    # n.add_child(self.name())
+    n.set_token(self.lookahead)
+    self.match('IDENTIFIER')
+    # Need to eventually allow for type parameters. (This would allow
+    # us to know that this was a class type, if that matters.)
+    return n
+
   def pointerType (self) -> ast.AstNode:
     n = ast.AstNode('PointerType')
     n.set_token(self.lookahead)
@@ -823,61 +875,7 @@ class Parser:
     return n
 
   def primitiveType (self) -> ast.AstNode:
-    match self.lookahead.kind:
-      case 'VOID':
-        n = self.voidType()
-      case 'BOOL':
-        n = self.boolType()
-      case 'CHAR':
-        n = self.charType()
-      case 'INT':
-        n = self.intType()
-      case 'INT32':
-        n = self.int32Type()
-      case 'FLOAT':
-        n = self.floatType()
-      case 'DOUBLE':
-        n = self.doubleType()
-    return n
-
-  def voidType (self) -> ast.AstNode:
-    n = ast.AstNode('VoidType')
+    n = ast.AstNode('PrimitiveType')
     n.set_token(self.lookahead)
-    self.match('VOID')
-    return n
-
-  def boolType (self) -> ast.AstNode:
-    n = ast.AstNode('BoolType')
-    n.set_token(self.lookahead)
-    self.match('BOOL')
-    return n
-
-  def charType (self) -> ast.AstNode:
-    n = ast.AstNode('CharType')
-    n.set_token(self.lookahead)
-    self.match('CHAR')
-    return n
-
-  def intType (self) -> ast.AstNode:
-    n = ast.AstNode('IntType')
-    n.set_token(self.lookahead)
-    self.match('INT')
-    return n
-
-  def int32Type (self) -> ast.AstNode:
-    n = ast.AstNode('Int32Type')
-    n.set_token(self.lookahead)
-    self.match('INT32')
-    return n
-
-  def floatType (self) -> ast.AstNode:
-    n = ast.AstNode('FloatType')
-    n.set_token(self.lookahead)
-    self.match('FLOAT')
-    return n
-
-  def doubleType (self) -> ast.AstNode:
-    n = ast.AstNode('DoubleType')
-    n.set_token(self.lookahead)
-    self.match('DOUBLE')
+    self.match(self.lookahead.kind)
     return n

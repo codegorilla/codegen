@@ -1,23 +1,27 @@
 from enum import Enum
 from typing import List
-from collections import deque
 
 from co.ast import AstNode
-from co.types import TypeNode
+from co.types import TypeNode, TypealiasTypeNode
+from co.types import PrimitiveTypeNode, StructureTypeNode, UnionTypeNode
+
 from co.st import Scope, ConstantSymbol, FunctionSymbol, VariableSymbol
-from co.st import ClassSymbol, PrimitiveSymbol, StructureSymbol, UnionSymbol
+from co.st import ClassSymbol, StructureSymbol, UnionSymbol, TypeSymbol, TypealiasSymbol
 
 # Purpose:
 
 # Define type (and function?) symbols
 
+# We only need to create the symbol table entries for objects. We
+# do not need to set their types, which will be done in a later pass.
+
+# I don't think this is true anymore:
 # We only need to define symbols that represent types in this pass.
 # Future passes that define objects (e.g. constants, variables) will
 # need to reference these type symbols. We might also need to define
 # function symbols here in order to allow forward references.
 
-# Q. Should primitive types be entered into the symbol table too?
-# What advantages/disadvantages does that have?
+# We might need to do all types first before doing function symbols.
 
 # Notes:
 #
@@ -32,6 +36,7 @@ from co.st import ClassSymbol, PrimitiveSymbol, StructureSymbol, UnionSymbol
 #
 # 3. Can we just recurse through looking for declaration nodes and
 # declaration statement nodes, or do we need to descend methodically?
+# I think we need to descend because we need to define all symbols.
 #
 # 4. For now, we don't support nested structures, unions, or classes.
 # These are all declared globally. At some point we may add nested
@@ -51,35 +56,29 @@ from co.st import ClassSymbol, PrimitiveSymbol, StructureSymbol, UnionSymbol
 class Pass1:
 
   def __init__ (self):
-    # Create built-in scope and define primitive types
-    self.builtin_scope = Scope('Builtin')
-    self.current_scope = self.builtin_scope
+    self.builtin_scope: Scope = Scope('Builtin')
+    self.current_scope: Scope = self.builtin_scope
     self.definePrimitiveTypes()
 
-  def definePrimitiveTypes (self):
+  def definePrimitiveTypes(self):
     # Built-in primitive types
-    self.builtin_scope.define(PrimitiveSymbol('bool',    TypeNode('bool')))
-    self.builtin_scope.define(PrimitiveSymbol('int8',    TypeNode('int8')))
-    self.builtin_scope.define(PrimitiveSymbol('int16',   TypeNode('int16')))
-    self.builtin_scope.define(PrimitiveSymbol('int32',   TypeNode('int32')))
-    self.builtin_scope.define(PrimitiveSymbol('int64',   TypeNode('int64')))
-    self.builtin_scope.define(PrimitiveSymbol('uint8',   TypeNode('uint8')))
-    self.builtin_scope.define(PrimitiveSymbol('uint16',  TypeNode('uint16')))
-    self.builtin_scope.define(PrimitiveSymbol('uint32',  TypeNode('uint32')))
-    self.builtin_scope.define(PrimitiveSymbol('uint64',  TypeNode('uint64')))
-    self.builtin_scope.define(PrimitiveSymbol('float32', TypeNode('float32')))
-    self.builtin_scope.define(PrimitiveSymbol('float64', TypeNode('float64')))
-    # Aliases for built-in primitive types
-    self.builtin_scope.define(PrimitiveSymbol('char',   TypeNode('char')))
-    self.builtin_scope.define(PrimitiveSymbol('short',  TypeNode('short')))
-    self.builtin_scope.define(PrimitiveSymbol('int',    TypeNode('int')))
-    self.builtin_scope.define(PrimitiveSymbol('long',   TypeNode('long')))
-    self.builtin_scope.define(PrimitiveSymbol('uchar',  TypeNode('uchar')))
-    self.builtin_scope.define(PrimitiveSymbol('ushort', TypeNode('ushort')))
-    self.builtin_scope.define(PrimitiveSymbol('uint',   TypeNode('uint')))
-    self.builtin_scope.define(PrimitiveSymbol('ulong',  TypeNode('ulong')))
-    self.builtin_scope.define(PrimitiveSymbol('float',  TypeNode('float')))
-    self.builtin_scope.define(PrimitiveSymbol('double', TypeNode('double')))
+    # Is null_t (nullptr_t) considered a primitive type? Can you declare
+    # a variable of this type? It seems you can in C++.
+    self.builtin_scope.define(TypeSymbol('null_t',  PrimitiveTypeNode('null_t')))
+    self.builtin_scope.define(TypeSymbol('bool',    PrimitiveTypeNode('bool')))
+    self.builtin_scope.define(TypeSymbol('int8',    PrimitiveTypeNode('int8')))
+    self.builtin_scope.define(TypeSymbol('int16',   PrimitiveTypeNode('int16')))
+    self.builtin_scope.define(TypeSymbol('int32',   PrimitiveTypeNode('int32')))
+    self.builtin_scope.define(TypeSymbol('int64',   PrimitiveTypeNode('int64')))
+    self.builtin_scope.define(TypeSymbol('uint8',   PrimitiveTypeNode('uint8')))
+    self.builtin_scope.define(TypeSymbol('uint16',  PrimitiveTypeNode('uint16')))
+    self.builtin_scope.define(TypeSymbol('uint32',  PrimitiveTypeNode('uint32')))
+    self.builtin_scope.define(TypeSymbol('uint64',  PrimitiveTypeNode('uint64')))
+    self.builtin_scope.define(TypeSymbol('float32', PrimitiveTypeNode('float32')))
+    self.builtin_scope.define(TypeSymbol('float64', PrimitiveTypeNode('float64')))
+    self.builtin_scope.define(TypeSymbol('void',    PrimitiveTypeNode('void')))
+
+  # BEGIN
 
   def translationUnit (self, node: AstNode):
     # Create and push global scope
@@ -93,6 +92,8 @@ class Pass1:
     # Pop global scope
     self.current_scope = self.current_scope.enclosing_scope
 
+  # DECLARATIONS
+
   def declaration (self, node: AstNode):
     match node.kind:
       case 'ClassDeclaration':
@@ -103,6 +104,8 @@ class Pass1:
         self.functionDeclaration(node)
       case 'StructureDeclaration':
         self.structureDeclaration(node)
+      case 'TypealiasDeclaration':
+        self.typealiasDeclaration(node)
       case 'UnionDeclaration':
         self.unionDeclaration(node)
       case 'VariableDeclaration':
@@ -125,7 +128,7 @@ class Pass1:
   def className (self, node: AstNode):
     name = node.token.lexeme
     if self.current_scope.is_defined(name):
-      print(f"error ({node.token.line}): class '{name}' already defined")
+      print(f"error ({node.token.line}): symbol '{name}' already defined")
     else:
       self.current_scope.define(ClassSymbol(name, TypeNode(name)))
 
@@ -138,9 +141,11 @@ class Pass1:
   def constantName (self, node: AstNode):
     name = node.token.lexeme
     if self.current_scope.is_defined(name):
-      print(f"error ({node.token.line}): constant '{name}' already defined")
+      print(f"error ({node.token.line}): symbol '{name}' already defined")
     else:
-      self.current_scope.define(ConstantSymbol(name))
+      symbol = ConstantSymbol(name)
+      self.current_scope.define(symbol)
+      node.set_attribute('symbol', symbol)
 
   def functionDeclaration (self, node: AstNode):
     self.functionName(node.child(0))
@@ -160,7 +165,7 @@ class Pass1:
   def functionName (self, node: AstNode):
     name = node.token.lexeme
     if self.current_scope.is_defined(name):
-      print(f"error ({node.token.line}): function '{name}' already defined")
+      print(f"error ({node.token.line}): symbol '{name}' already defined")
     else:
       self.current_scope.define(FunctionSymbol(name))
 
@@ -174,7 +179,7 @@ class Pass1:
   def parameterName (self, node: AstNode):
     name = node.token.lexeme
     if self.current_scope.is_defined(name):
-      print(f"error ({node.token.line}): parameter '{name}' already defined")
+      print(f"error ({node.token.line}): symbol '{name}' already defined")
     else:
       self.current_scope.define(VariableSymbol(name))
 
@@ -186,6 +191,10 @@ class Pass1:
       self.statement(stmt_node)
 
   def statement (self, node: AstNode):
+    if node.kind == 'DeclarationStatement':
+      self.declarationStatement(node.child())
+
+  def declarationStatement (self, node: AstNode):
     match node.kind:
       case 'ConstantDeclaration':
         self.constantDeclaration(node)
@@ -211,9 +220,9 @@ class Pass1:
   def structureName (self, node: AstNode):
     name = node.token.lexeme
     if self.current_scope.is_defined(name):
-      print(f"error ({node.token.line}): structure '{name}' already defined")
+      print(f"error ({node.token.line}): symbol '{name}' already defined")
     else:
-      self.current_scope.define(StructureSymbol(name, TypeNode(name)))
+      self.current_scope.define(TypeSymbol(name, StructureTypeNode(name)))
 
   def structureBody (self, node: AstNode):
     for member_node in node.children:
@@ -225,11 +234,29 @@ class Pass1:
   def memberName (self, node: AstNode):
     name = node.token.lexeme
     if self.current_scope.is_defined(name):
-      print(f"error ({node.token.line}): member '{name}' already defined")
+      print(f"error ({node.token.line}): symbol '{name}' already defined")
     else:
       # It seems like we can just use variable symbol here
       # Do we need to set the scope attribute on variable declaration nodes?
       self.current_scope.define(VariableSymbol(name))
+
+  def typealiasDeclaration (self, node: AstNode):
+    # We are declaring a type alias for an existing type. Should we
+    # try to resolve the actual type in this pass, or do so in
+    # another pass? If we do it in another pass, then we can support
+    # out-of-order typealias declarations.
+    self.typealiasName(node.child(0))
+
+  def typealiasName (self, node: AstNode):
+    # Should we set a scope attribute on names that says what scope
+    # they are in? I don't think so, because the scope would already
+    # be tracked as you descend into scoped elements.
+    name = node.token.lexeme
+    if self.current_scope.is_defined(name):
+      print(f"error ({node.token.line}): symbol '{name}' already defined")
+    else:
+      s = TypeSymbol(name, TypealiasTypeNode(name))
+      self.current_scope.define(s)
 
   def unionDeclaration (self, node: AstNode):
     self.unionName(node.child(0))
@@ -248,9 +275,9 @@ class Pass1:
   def unionName (self, node: AstNode):
     name = node.token.lexeme
     if self.current_scope.is_defined(name):
-      print(f"error ({node.token.line}): union '{name}' already defined")
+      print(f"error ({node.token.line}): symbol '{name}' already defined")
     else:
-      self.current_scope.define(UnionSymbol(name, TypeNode(name)))
+      self.current_scope.define(TypeSymbol(name, UnionTypeNode(name)))
 
   def unionBody (self, node: AstNode):
     for member_node in node.children:
@@ -262,7 +289,7 @@ class Pass1:
   def variableName (self, node: AstNode):
     name = node.token.lexeme
     if self.current_scope.is_defined(name):
-      print(f"error ({node.token.line}): variable '{name}' already defined")
+      print(f"error ({node.token.line}): symbol '{name}' already defined")
     else:
       symbol = VariableSymbol(name)
       self.current_scope.define(symbol)

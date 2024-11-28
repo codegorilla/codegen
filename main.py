@@ -9,6 +9,15 @@ from co import ast
 from co import types
 from co.st import Scope
 
+from co.types import TypeNode
+from co.types import TypealiasTypeNode
+from co.types import ArrayTypeNode
+from co.types import ClassTypeNode
+from co.types import PointerTypeNode
+from co.types import PrimitiveTypeNode
+from co.types import StructureTypeNode
+from co.types import FunctionTypeNode
+
 
 # Load input from file
 with open('test.co.txt', 'r') as file:
@@ -33,8 +42,13 @@ parser = reader.Parser()
 parser.setInput(lexer)
 root = parser.translationUnit()
 
+# pass0 = reader.Pass0()
+
 pass1 = reader.Pass1()
 pass1.translationUnit(root)
 
-pass2 = reader.Pass2()
+pass2 = reader.Pass2(pass1.builtin_scope)
 pass2.translationUnit(root)
+
+pass3 = reader.Pass3(pass1.builtin_scope)
+pass3.translationUnit(root)

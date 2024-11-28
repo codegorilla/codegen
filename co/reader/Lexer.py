@@ -85,22 +85,30 @@ keyword_lookup = {
   'if': 'IF',
   'in': 'IN',
   'loop': 'LOOP',
+  'null': 'NULL',
   'or': 'OR',
   'return': 'RETURN',
   'struct': 'STRUCT',
   'then': 'THEN',
   'true': 'TRUE',
+  'typealias': 'TYPEALIAS',
   'union': 'UNION',
   'val': 'VAL',
   'var': 'VAR',
   'while': 'WHILE',
 
-  'void': 'VOID',
   'bool': 'BOOL',
-  'double': 'DOUBLE',
-  'float': 'FLOAT',
-  'char': 'CHAR',
-  'int': 'INT'
+  'float32': 'FLOAT32',
+  'float64': 'FLOAT64',
+  'int8': 'INT8',
+  'int16': 'INT16',
+  'int32': 'INT32',
+  'int64': 'INT64',
+  'uint8': 'UINT8',
+  'uint16': 'UINT16',
+  'uint32': 'UINT32',
+  'uint64': 'UINT64',
+  'void': 'VOID'
 }
 
 class Lexer:
@@ -495,7 +503,7 @@ class Lexer:
             # Accept
             end = self.position
             value = self.input[begin:end]
-            return reader.Token('BINARY_INT32', value, self.line, self.column)
+            return reader.Token('BINARY_INT32_LITERAL', value, self.line, self.column)
         case State.BIN_500:
           if self.is_bin_digit(self.current):
             self.consume()
@@ -519,7 +527,7 @@ class Lexer:
             # Accept
             end = self.position
             value = self.input[begin:end]
-            return reader.Token('BINARY_INT64', value, self.line, self.column)
+            return reader.Token('BINARY_INT64_LITERAL', value, self.line, self.column)
         case State.BIN_700:
           if self.current == 'L':
             self.consume()
@@ -528,12 +536,12 @@ class Lexer:
             # Accept
             end = self.position
             value = self.input[begin:end]
-            return reader.Token('BINARY_UINT32', value, self.line, self.column)
+            return reader.Token('BINARY_UINT32_LITERAL', value, self.line, self.column)
         case State.BIN_800:
             # Accept
             end = self.position
             value = self.input[begin:end]
-            return reader.Token('BINARY_UINT64', value, self.line, self.column)
+            return reader.Token('BINARY_UINT64_LITERAL', value, self.line, self.column)
         case _:
           # Invalid state. Can only be reached through a lexer bug.
           print("error: Invalid state.")
@@ -595,7 +603,7 @@ class Lexer:
             # Accept
             end = self.position
             value = self.input[begin:end]
-            return reader.Token('OCTAL_INT32', value, self.line, self.column)
+            return reader.Token('OCTAL_INT32_LITERAL', value, self.line, self.column)
         case State.OCT_500:
           if self.is_oct_digit(self.current):
             self.consume()
@@ -619,7 +627,7 @@ class Lexer:
             # Accept
             end = self.position
             value = self.input[begin:end]
-            return reader.Token('OCTAL_INT64', value, self.line, self.column)
+            return reader.Token('OCTAL_INT64_LITERAL', value, self.line, self.column)
         case State.OCT_700:
           if self.current == 'L':
             self.consume()
@@ -628,7 +636,7 @@ class Lexer:
             # Accept
             end = self.position
             value = self.input[begin:end]
-            return reader.Token('OCTAL_UINT32', value, self.line, self.column)
+            return reader.Token('OCTAL_UINT32_LITERAL', value, self.line, self.column)
         case State.OCT_800:
             # Accept
             end = self.position
@@ -702,7 +710,7 @@ class Lexer:
             # Accept
             end = self.position
             value = self.input[begin:end]
-            return reader.Token('HEXADECIMAL_INT32', value, self.line, self.column)
+            return reader.Token('HEXADECIMAL_INT32_LITERAL', value, self.line, self.column)
         case State.HEX_200:
           if self.is_hex_digit(self.current):
             self.consume()
@@ -728,7 +736,7 @@ class Lexer:
           else:
             end = self.position
             value = self.input[begin:end]
-            return reader.Token('HEXADECIMAL_INT64', value, self.line, self.column)
+            return reader.Token('HEXADECIMAL_INT64_LITERAL', value, self.line, self.column)
         case State.HEX_220:
           if self.current == 'L':
             self.consume()
@@ -736,11 +744,11 @@ class Lexer:
           else:
             end = self.position
             value = self.input[begin:end]
-            return reader.Token('HEXADECIMAL_UINT32', value, self.line, self.column)
+            return reader.Token('HEXADECIMAL_UINT32_LITERAL', value, self.line, self.column)
         case State.HEX_230:
           end = self.position
           value = self.input[begin:end]
-          return reader.Token('HEXADECIMAL_UINT64', value, self.line, self.column)
+          return reader.Token('HEXADECIMAL_UINT64_LITERAL', value, self.line, self.column)
         case State.HEX_300:
           if self.is_hex_digit(self.current):
             self.consume()
@@ -864,7 +872,7 @@ class Lexer:
           else:
             end = self.position
             value = self.input[begin:end]
-            return reader.Token('INT32', value, self.line, self.column)
+            return reader.Token('INT32_LITERAL', value, self.line, self.column)
         case State.NUM_200:
           if self.is_dec_digit(self.current):
             self.consume()
@@ -896,7 +904,7 @@ class Lexer:
           else:
             end = self.position
             value = self.input[begin:end]
-            return reader.Token('INT64', value, self.line, self.column)
+            return reader.Token('INT64_LITERAL', value, self.line, self.column)
         case State.NUM_220:
           if self.current == 'L':
             self.consume()
@@ -904,11 +912,11 @@ class Lexer:
           else:
             end = self.position
             value = self.input[begin:end]
-            return reader.Token('UINT32', value, self.line, self.column)
+            return reader.Token('UINT32_LITERAL', value, self.line, self.column)
         case State.NUM_230:
           end = self.position
           value = self.input[begin:end]
-          return reader.Token('UINT64', value, self.line, self.column)
+          return reader.Token('UINT64_LITERAL', value, self.line, self.column)
         case State.NUM_300:
           if self.is_dec_digit(self.current):
             self.consume()

@@ -31,11 +31,7 @@ class AstNode:
     self.token = token
 
   def attribute (self, name: str):
-    return self.attributes[name]
+    return self.attributes.get(name)
 
   def set_attribute (self, name: str, value):
     self.attributes[name] = value
-
-
-  # def accept (self, visitor):
-  #   visitor.visit(self)

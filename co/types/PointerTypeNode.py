@@ -2,9 +2,9 @@ from co.types import TypeNode
 
 class PointerTypeNode (TypeNode):
 
-  def __init__ (self, data_type: TypeNode):
+  def __init__ (self, base_type: TypeNode):
     super().__init__()
-    self.data_type: TypeNode = data_type
+    self.base_type: TypeNode = base_type
 
   def __repr__ (self):
-    return f"PointerTypeNode({self.data_type})"
+    return f"PointerTypeNode({self.base_type})"

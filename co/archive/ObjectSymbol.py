@@ -9,5 +9,8 @@ class ObjectSymbol (Symbol):
     super().__init__(name)
     self.type: TypeNode = None
 
+  def set_is_constant (self, is_constant: bool):
+    self.is_constant: bool = is_constant
+
   def set_type (self, type: TypeNode):
     self.type: TypeNode = type

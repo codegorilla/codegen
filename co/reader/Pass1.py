@@ -2,24 +2,33 @@ from enum import Enum
 from typing import List
 
 from co.ast import AstNode
-from co.types import TypeNode, TypealiasTypeNode
-from co.types import PrimitiveTypeNode, StructureTypeNode, UnionTypeNode
+from co.types import TypeNode
+from co.types import PrimitiveTypeNode, StructureTypeNode, TypealiasTypeNode, UnionTypeNode
 
-from co.st import Scope, ConstantSymbol, FunctionSymbol, VariableSymbol
-from co.st import ClassSymbol, StructureSymbol, UnionSymbol, TypeSymbol, TypealiasSymbol
+from co.st import Scope, FunctionSymbol, VariableSymbol
+from co.st import ClassSymbol, StructureSymbol, UnionSymbol, TypeSymbol
 
 # Purpose:
+#
+# 1. Create scope tree
+# 2. Define primitive type symbols
+# 3. Define nominal type symbols
+# 3. Define variable symbols
+# 4. Prepare variable name references to be resolved
 
-# Define type (and function?) symbols
+# Not sure if we need to define function symbols here too.
 
-# We only need to create the symbol table entries for objects. We
+# Should we process modifiers in this pass?
+
+# We only need to create the symbol table entries for variables. We
 # do not need to set their types, which will be done in a later pass.
+# This needs to be done in a later pass because types can be omitted
+# when using type inference.
 
 # I don't think this is true anymore:
 # We only need to define symbols that represent types in this pass.
-# Future passes that define objects (e.g. constants, variables) will
-# need to reference these type symbols. We might also need to define
-# function symbols here in order to allow forward references.
+# We might also need to define function symbols here in order to
+# allow forward references.
 
 # We might need to do all types first before doing function symbols.
 
@@ -34,9 +43,22 @@ from co.st import ClassSymbol, StructureSymbol, UnionSymbol, TypeSymbol, Typeali
 # foolproof and circular dependencies cannot be handled anyways.
 # Moreover, this would be a pretty low priority.
 #
-# 3. Can we just recurse through looking for declaration nodes and
-# declaration statement nodes, or do we need to descend methodically?
-# I think we need to descend because we need to define all symbols.
+# Global variables must be initialized when declared, and their
+# initializer expressions must only contain constant values, which
+# may either be literals or names of constant variables.
+#
+# A global variable that is not initialized will get a default value
+# such as the following:
+# - integer: 0
+# - floating point: 0.0
+# - bool: false
+#
+# Variable declarations may not have circular definitions (direct or
+# transitive). This requires building a dependency graph and checking
+# for cycles.
+#
+# Local variables must be declared before use. Global variables do
+# not have that restriction.
 #
 # 4. For now, we don't support nested structures, unions, or classes.
 # These are all declared globally. At some point we may add nested
@@ -46,37 +68,50 @@ from co.st import ClassSymbol, StructureSymbol, UnionSymbol, TypeSymbol, Typeali
 # of classes within modules and/or namespaces.
 #
 # 5. We may only need to support forward references for structs,
-# unions, classes, and functions. There shouldn't be any cases where
-# we need to support forward references for variables.
-#
-# 6. We might need to add symbols for constants and variables so that
-# they can be declared extern in header files. But I think this can
-# be done in a future pass.
+# unions, classes, and functions.
+
+class PrimitiveType (Enum):
+  NULL_T  = PrimitiveTypeNode('null_t')
+  BOOL    = PrimitiveTypeNode('bool')
+  INT8    = PrimitiveTypeNode('int8')
+  INT16   = PrimitiveTypeNode('int16')
+  INT32   = PrimitiveTypeNode('int32')
+  INT64   = PrimitiveTypeNode('int64')
+  UINT8   = PrimitiveTypeNode('uint8')
+  UINT16  = PrimitiveTypeNode('uint16')
+  UINT32  = PrimitiveTypeNode('uint32')
+  UINT64  = PrimitiveTypeNode('uint64')
+  FLOAT32 = PrimitiveTypeNode('float32')
+  FLOAT64 = PrimitiveTypeNode('float64')
+  VOID    = PrimitiveTypeNode('void')
 
 class Pass1:
 
-  def __init__ (self):
+  def __init__ (self, root_node: AstNode):
+    self.root_node = root_node
     self.builtin_scope: Scope = Scope('Builtin')
     self.current_scope: Scope = self.builtin_scope
     self.definePrimitiveTypes()
 
   def definePrimitiveTypes(self):
-    # Built-in primitive types
-    # Is null_t (nullptr_t) considered a primitive type? Can you declare
-    # a variable of this type? It seems you can in C++.
-    self.builtin_scope.define(TypeSymbol('null_t',  PrimitiveTypeNode('null_t')))
-    self.builtin_scope.define(TypeSymbol('bool',    PrimitiveTypeNode('bool')))
-    self.builtin_scope.define(TypeSymbol('int8',    PrimitiveTypeNode('int8')))
-    self.builtin_scope.define(TypeSymbol('int16',   PrimitiveTypeNode('int16')))
-    self.builtin_scope.define(TypeSymbol('int32',   PrimitiveTypeNode('int32')))
-    self.builtin_scope.define(TypeSymbol('int64',   PrimitiveTypeNode('int64')))
-    self.builtin_scope.define(TypeSymbol('uint8',   PrimitiveTypeNode('uint8')))
-    self.builtin_scope.define(TypeSymbol('uint16',  PrimitiveTypeNode('uint16')))
-    self.builtin_scope.define(TypeSymbol('uint32',  PrimitiveTypeNode('uint32')))
-    self.builtin_scope.define(TypeSymbol('uint64',  PrimitiveTypeNode('uint64')))
-    self.builtin_scope.define(TypeSymbol('float32', PrimitiveTypeNode('float32')))
-    self.builtin_scope.define(TypeSymbol('float64', PrimitiveTypeNode('float64')))
-    self.builtin_scope.define(TypeSymbol('void',    PrimitiveTypeNode('void')))
+    # Define built-in primitive types. C++ calls these "fundamental"
+    # types, whereas Java uses the term "primitive" types.
+    self.builtin_scope.define(TypeSymbol('null_t',  PrimitiveType.NULL_T.value))
+    self.builtin_scope.define(TypeSymbol('bool',    PrimitiveType.BOOL.value))
+    self.builtin_scope.define(TypeSymbol('int8',    PrimitiveType.INT8.value))
+    self.builtin_scope.define(TypeSymbol('int16',   PrimitiveType.INT16.value))
+    self.builtin_scope.define(TypeSymbol('int32',   PrimitiveType.INT32.value))
+    self.builtin_scope.define(TypeSymbol('int64',   PrimitiveType.INT64.value))
+    self.builtin_scope.define(TypeSymbol('uint8',   PrimitiveType.UINT8.value))
+    self.builtin_scope.define(TypeSymbol('uint16',  PrimitiveType.UINT16.value))
+    self.builtin_scope.define(TypeSymbol('uint32',  PrimitiveType.UINT32.value))
+    self.builtin_scope.define(TypeSymbol('uint64',  PrimitiveType.UINT64.value))
+    self.builtin_scope.define(TypeSymbol('float32', PrimitiveType.FLOAT32.value))
+    self.builtin_scope.define(TypeSymbol('float64', PrimitiveType.FLOAT64.value))
+    self.builtin_scope.define(TypeSymbol('void',    PrimitiveType.VOID.value))
+
+  def process (self):
+    self.translationUnit(self.root_node)
 
   # BEGIN
 
@@ -98,8 +133,6 @@ class Pass1:
     match node.kind:
       case 'ClassDeclaration':
         self.classDeclaration(node)
-      case 'ConstantDeclaration':
-        self.constantDeclaration(node)
       case 'FunctionDeclaration':
         self.functionDeclaration(node)
       case 'StructureDeclaration':
@@ -134,18 +167,6 @@ class Pass1:
 
   def classBody (self, node: AstNode):
     pass
-
-  def constantDeclaration (self, node: AstNode):
-    self.constantName(node.child(0))
-
-  def constantName (self, node: AstNode):
-    name = node.token.lexeme
-    if self.current_scope.is_defined(name):
-      print(f"error ({node.token.line}): symbol '{name}' already defined")
-    else:
-      symbol = ConstantSymbol(name)
-      self.current_scope.define(symbol)
-      node.set_attribute('symbol', symbol)
 
   def functionDeclaration (self, node: AstNode):
     self.functionName(node.child(0))
@@ -284,7 +305,18 @@ class Pass1:
       self.member(member_node)
 
   def variableDeclaration (self, node: AstNode):
-    self.variableName(node.child(0))
+    # Example of inherited attribute. Should we just set it on the
+    # name node during parsing (or in a previous pass) instead?
+    # Perhaps it depends on how/when modifiers are processed. Should
+    # we process modifiers in this pass or a previous pass?
+    name_node = node.child(0)
+    name_node.set_attribute('is_constant', node.attribute('is_constant'))
+    name_node.set_attribute('is_final', node.attribute('is_final'))
+    self.variableName(name_node)
+    self.type(node.child(1))
+    # Initializer is optional
+    if node.child_count() == 3:
+      self.expressionRoot(node.child(2))
 
   def variableName (self, node: AstNode):
     name = node.token.lexeme
@@ -292,5 +324,56 @@ class Pass1:
       print(f"error ({node.token.line}): symbol '{name}' already defined")
     else:
       symbol = VariableSymbol(name)
+      if node.attribute('is_constant'):
+        symbol.set_constant(True)
+      if node.attribute('is_final'):
+        symbol.set_final(True)
       self.current_scope.define(symbol)
       node.set_attribute('symbol', symbol)
+      # Should we also set scope attribute too? See Parr, pg. 168. If
+      # we set scope attribute on appropriate nodes, then there is no
+      # need to keep track of current scope in future passes.
+      # We might not need to set it on variableName because we
+      # already have the symbol as an attribute. But we should
+      # probably set it on names in expressions because we still need
+      # to be able to resolve those names.
+      # node.set_attribute('scope', self.current_scope)
+
+# TYPES
+
+  def type (self, node: AstNode):
+    if node.kind == 'ArrayType':
+      self.arrayType(node)
+
+  def arrayType (self, node: AstNode):
+    # Might be incompletely specified (e.g. int[]), but assume fully
+    # specified for now.
+    self.expressionRoot(node.child(0))
+    self.type(node.child(1))
+
+# STATEMENTS
+
+# EXPRESSIONS
+
+  def expressionRoot (self, node: AstNode):
+    self.expression(node.child())
+
+  def expression (self, node: AstNode):
+    match node.kind:
+      case 'BinaryExpression':
+        self.binaryExpression(node)
+      case 'UnaryExpression':
+        self.unaryExpression(node)
+      case 'Name':
+        self.name(node)
+      # There are additional node kinds that we need to address
+
+  def binaryExpression (self, node: AstNode):
+    self.expression(node.child(0))
+    self.expression(node.child(1))
+
+  def name (self, node: AstNode):
+    node.set_attribute('scope', self.current_scope)
+
+  def unaryExpression (self, node: AstNode):
+    self.expression(node.child())

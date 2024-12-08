@@ -1,4 +1,4 @@
-from co.st.ObjectSymbol import ObjectSymbol
+from co.archive.ObjectSymbol import ObjectSymbol
 
 class ConstantSymbol (ObjectSymbol):
 

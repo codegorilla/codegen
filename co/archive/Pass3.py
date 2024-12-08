@@ -6,34 +6,30 @@ from collections import deque
 # from co import types
 
 from co.ast import AstNode
-from co.types import TypeNode
-from co.st import Scope, ConstantSymbol, FunctionSymbol, VariableSymbol
+from co.types import TypeNode, ArrayTypeNode, PointerTypeNode
+from co.st import Scope, FunctionSymbol, VariableSymbol, TypeSymbol
 from co.st import ClassSymbol, PrimitiveSymbol, StructureSymbol, UnionSymbol
 
 
 # Purpose:
 
-# Compute type expressions for objects (e.g. constants and variables)
-# Compute type expressions for expressions
-# Possibly enforce types, but that might be a third pass
+# Determine if expressions are compile-time constants
+
+# Literal values or constants
+
 
 # Notes:
 #
-# 1. In C, global variables must be constants and must be declared
-# before use. In C++, they don't need to be constants, but still need
-# to be declared before use.
+# Note sure if we need to pass in scope information. Actually, we do
+# because we need to know if it is a constant or not.
 #
-# 2. We might be able to create a dependency graph and move global
-# variables to a place before they are used. However, this is not
-# foolproof and circular dependencies cannot be handled anyways.
-# Moreover, this would be a pretty low priority.
-#
-# 3. Can we just recurse through looking for type nodes and
-# expression nodes, or do we need to descend methodically?
+# Does each kind of thing get its own symbol type? If not, then
+# object symbols can be marked as constant or not.
 
 class Pass3:
 
-  def __init__ (self, builtin_scope: Scope):
+  def __init__ (self, root_node: AstNode, builtin_scope: Scope):
+    self.root_node = root_node
     self.builtin_scope: Scope = builtin_scope
     self.current_scope: Scope = builtin_scope
 
@@ -58,14 +54,73 @@ class Pass3:
   def resultType (self, op: str, t1: TypeNode, t2: TypeNode) -> TypeNode:
     pass
 
+  def process (self):
+    # Search for expression roots
+    self.search(self.root_node)
+    # self.traverse(self.root_node)
+
   # BEGIN
 
-  def translationUnit (self, node: AstNode):
-    self.current_scope = node.attribute('scope')
-    for decl_node in node.children:
-      self.declaration(decl_node)
+  # Once we find expression root, we can methodically descend from
+  # there.
+
+  def search (self, node: AstNode):
+    if node.kind == 'ExpressionRoot':
+      self.expressionRoot(node)
+    else:
+      for child_node in node.children:
+        self.search(child_node)
+
+  def expressionRoot (self, node: AstNode):
+    expr_node = node.child()
+    self.expression(expr_node)
+    result = expr_node.attribute('is_constant')
+    node.set_attribute('is_constant', result)
+
+  def expression (self, node: AstNode):
+    # Dispatch method
+    match node.kind:
+      case 'BinaryExpression':
+        self.binaryExpression(node)
+      case 'UnaryExpression':
+        self.unaryExpression(node)
+      case 'Name':
+        self.name(node)
+      case kind if kind in [
+        'BooleanLiteral',
+        'FloatingPointLiteral',
+        'IntegerLiteral'
+      ]:
+        self.literal(node)
+
+  def binaryExpression (self, node: AstNode):
+    left_node  = node.child(0)
+    right_node = node.child(1)
+    self.expression(left_node)
+    self.expression(right_node)
+    result = left_node.attribute('is_constant') and right_node.attribute('is_constant')
+    node.set_attribute('is_constant', result)
+
+  def name (self, node: AstNode):
+    scope: Scope = node.attribute('scope')
+    symbol: VariableSymbol = scope.resolve(node.token.lexeme)
+    result = symbol.constant_flag
+    node.set_attribute('is_constant', result)
+
+  def literal (self, node: AstNode):
+    result = True
+    node.set_attribute('is_constant', result)
+
+  def unaryExpression (self, node: AstNode):
+    child_node = node.child()
+    self.expression(child_node)
+    result = child_node.attribute('is_constant')
+    node.set_attribute('is_constant', result)
+
+
 
   # DECLARATIONS
+
 
   def declaration (self, node: AstNode):
     match node.kind:
@@ -80,8 +135,6 @@ class Pass3:
         pass
       case 'UnionDeclaration':
         pass
-      case 'ConstantDeclaration':
-        self.constantDeclaration(node)
       case 'VariableDeclaration':
         self.variableDeclaration(node)
       case _:
@@ -110,22 +163,18 @@ class Pass3:
     #     pass
     # return n
 
-  def constantDeclaration (self, node: AstNode):
-    name_node = node.child(0)
-    spec_node = node.child(1)
-    init_node = node.child(2)
-    self.expression(init_node)
-    # Type specifier is optional
-    if spec_node:
-      self.type(spec_node)
-      type = spec_node.attribute('type')
-    else:
-      type = init_node.attribute('type')
-    # Update consant's symbol table entry with type information. If
-    # type was not specified, infer it from expression's computed
-    # type.
-    symbol: VariableSymbol = name_node.attribute('symbol')
-    symbol.set_type(type)
+  # Might need to change concept of constant to mean final because it
+  # conflicts with compile-time const-ness.
+  # def constantDeclaration (self, node: AstNode):
+  #   name_node = node.child(0)
+  #   # spec_node = node.child(1)
+  #   init_node = node.child(2)
+  #   self.expression(init_node)
+  #   # Type specifier is optional
+  #   is_constant: bool = init_node.attribute('is_constant')
+  #   # Update consant's symbol table entry with constness information.
+  #   symbol: VariableSymbol = name_node.attribute('symbol')
+  #   symbol.set_is_constant(is_constant)
 
   def functionDeclaration (self, node: AstNode):
     name_node = node.child(0)
@@ -195,88 +244,59 @@ class Pass3:
     # Pop scope
     self.current_scope = self.current_scope.enclosing_scope
 
+  # Unless the variable is declared constant, we can't really do
+  # anything useful if the expression is determined to be constant.
+  # But for now we will make the determination anyways in case it is
+  # useful in the future. For example, a global final variable is
+  # essentially constant, so maybe we'd want to allow it to be
+  # treated as such in the future. Also, we need to descend into
+  # expressions that are part of array bounds to determine if they
+  # are constant, so just going into any expression seems to be the
+  # simplest way to do that for now.
+
   def variableDeclaration (self, node: AstNode):
     name_node = node.child(0)
     spec_node = node.child(1)
     init_node = node.child(2)
-    # Type specifier is optional
-    if spec_node:
-      self.type(spec_node)
-      type = spec_node.attribute('type')
-      # Initializer is optional when type was specified
-      if init_node:
-        self.expression(init_node)
-    else:
-      # Initializer is required when type was not specified
+    if init_node:
       self.expression(init_node)
-      type = init_node.attribute('type')
-    # Update variable's symbol table entry with type information. If
-    # type was not specified, infer it from expression's computed
-    # type.
+    is_constant: bool = init_node.attribute('is_constant')
+    # Update variable's symbol table entry with const-ness information
     symbol: VariableSymbol = name_node.attribute('symbol')
-    symbol.set_type(type)
+    symbol.set_is_constant(is_constant)
 
   # EXPRESSIONS
 
-  def expression (self, node: AstNode):
-    match node.kind:
-      case 'BinaryExpression':
-        self.binaryExpression(node)
-      case 'UnaryExpression':
-        self.unaryExpression(node)
-      case 'BooleanLiteral':
-        self.booleanLiteral(node)
-      case 'FloatingPointLiteral':
-        self.floatingPointLiteral(node)
-      case 'IntegerLiteral':
-        self.integerLiteral(node)
-      case 'NullLiteral':
-        self.nullLiteral(node)
-      case 'Name':
-        self.name(node)
-      case _:
-        print(f"error: did not match node kind on pass 2 {node.kind}")
+  # def expression (self, node: AstNode):
+  #   match node.kind:
+  #     case 'BinaryExpression':
+  #       self.binaryExpression(node)
+  #     case 'UnaryExpression':
+  #       self.unaryExpression(node)
+  #     case 'BooleanLiteral':
+  #       self.booleanLiteral(node)
+  #     case 'FloatingPointLiteral':
+  #       self.floatingPointLiteral(node)
+  #     case 'IntegerLiteral':
+  #       self.integerLiteral(node)
+  #     case 'NullLiteral':
+  #       self.nullLiteral(node)
+  #     case 'Name':
+  #       self.name(node)
+  #     case _:
+  #       print(f"error: did not match node kind on pass 2 {node.kind}")
 
   def booleanLiteral (self, node: AstNode):
-    symbol: PrimitiveSymbol = self.builtin_scope.resolve('bool')
-    node.set_attribute('type', symbol.type)
+    node.set_attribute('is_constant', True)
 
   def floatingPointLiteral (self, node: AstNode):
-    # Note: A value of type float64 can never be implicitly narrowed to type float32
-    type_name_lookup = {
-      'FLOAT32': 'float32',
-      'FLOAT64': 'float64'
-    }
-    # Map literal value's token kind to its corresponding primitive type name
-    type_name = type_name_lookup[node.token.kind]
-    symbol: PrimitiveSymbol = self.builtin_scope.resolve(type_name)
-    node.set_attribute('type', symbol.type)
+    node.set_attribute('is_constant', True)
 
   def integerLiteral (self, node: AstNode):
-    # https://learn.microsoft.com/en-us/dotnet/csharp/language-reference/builtin-types/numeric-conversions
-    # A value of a constant expression of type int (for example, a value represented by an integer literal) can be implicitly converted to...
-    # So an integer literal (without suffix) will always be an int32. However, during semantic
-    # analysis, we may narrow it if the value is within the range of the destination.
-    type_name_lookup = {
-      'INT32_LITERAL':  'int32',
-      'INT64_LITERAL':  'int64',
-      'UINT32_LITERAL': 'uint32',
-      'UINT64_LITERAL': 'uint64',
-    }
-    # Map literal value's token kind to its corresponding primitive type name
-    type_name = type_name_lookup[node.token.kind]
-    symbol: PrimitiveSymbol = self.builtin_scope.resolve(type_name)
-    node.set_attribute('type', symbol.type)
+    node.set_attribute('is_constant', True)
 
   def nullLiteral (self, node: AstNode):
-    # The null type is a special type, not really a primitive type,
-    # so this can be revisited. To do: We need to make sure that even
-    # though the null literal's type is the null type, it is not
-    # possible to declare a variable to have the null type. It must
-    # also not be possible to infer that a variable's type is the
-    # null type.
-    symbol: PrimitiveSymbol = self.builtin_scope.resolve('null')
-    node.set_attribute('type', symbol.type)
+    node.set_attribute('is_constant', True)
 
   def unaryExpression (self, node: AstNode):
     # We might need some checks to make sure these operators are
@@ -435,6 +455,8 @@ class Pass3:
     match node.kind:
       case 'ArrayType':
         self.arrayType(node)
+      case 'NominalType':
+        self.nominalType(node)
       case 'PointerType':
         self.pointerType(node)
       case 'PrimitiveType':
@@ -443,23 +465,32 @@ class Pass3:
         print(f"No matching type {node.kind}")
 
   def arrayType (self, node: AstNode):
-    # The size might not matter as far as the type goes.
-    # We would still need to check the size to make sure it is a
-    # compile-time integral constant, however.
-    # sizeNode = node.get_child(0)
-    ref_node = node.child()
-    self.type(ref_node)
-    t = TypeNode('array')
-    t.add_child(ref_node.attribute('type'))
-    node.set_attribute('type', t)
+    # We still need to check the size to make sure it is a compile-
+    # time integral constant.
+    size_node = node.child(0)
+    base_type_node = node.child(1)
+    # This should really be a compile-time constant expression. But
+    # we need to determine if it is a valid compile-time constant
+    # (that is also an integer) by semantic analysis.
+    size = size_node.token.lexeme
+    self.type(base_type_node)
+    type = ArrayTypeNode(size, base_type_node.attribute('type'))
+    node.set_attribute('type', type)
+
+  def nominalType (self, node: AstNode):
+    type_name = node.token.lexeme
+    symbol: TypeSymbol = self.current_scope.resolve(type_name)
+    type = symbol.type
+    node.set_attribute('type', type)
 
   def pointerType (self, node: AstNode):
-    ref_node = node.child()
-    self.type(ref_node)
-    t = TypeNode('pointer')
-    t.add_child(ref_node.attribute('type'))
-    node.set_attribute('type', t)
+    base_type_node = node.child()
+    self.type(base_type_node)
+    type = PointerTypeNode(base_type_node.attribute('type'))
+    node.set_attribute('type', type)
 
   def primitiveType (self, node: AstNode):
-    symbol = self.builtin_scope.resolve(node.token.lexeme)
-    node.set_attribute('type', symbol.type)
+    type_name = node.token.lexeme
+    symbol: TypeSymbol = self.builtin_scope.resolve(type_name)
+    type = symbol.type
+    node.set_attribute('type', type)

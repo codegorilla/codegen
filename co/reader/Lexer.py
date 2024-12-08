@@ -104,6 +104,7 @@ keyword_lookup = {
   'int16': 'INT16',
   'int32': 'INT32',
   'int64': 'INT64',
+  'null_t': 'NULL_T',
   'uint8': 'UINT8',
   'uint16': 'UINT16',
   'uint32': 'UINT32',
@@ -943,7 +944,7 @@ class Lexer:
           else:
             end = self.position
             value = self.input[begin:end]
-            return reader.Token('FLOAT64', value, self.line, self.column)
+            return reader.Token('FLOAT64_LITERAL', value, self.line, self.column)
         case State.NUM_500:
           if self.is_dec_digit(self.current):
             self.consume()
@@ -995,15 +996,15 @@ class Lexer:
           else:
             end = self.position
             value = self.input[begin:end]
-            return reader.Token('FLOAT64', value, self.line, self.column)
+            return reader.Token('FLOAT64_LITERAL', value, self.line, self.column)
         case State.NUM_810:
           end = self.position
           value = self.input[begin:end]
-          return reader.Token('FLOAT64', value, self.line, self.column)
+          return reader.Token('FLOAT64_LITERAL', value, self.line, self.column)
         case State.NUM_820:
           end = self.position
           value = self.input[begin:end]
-          return reader.Token('FLOAT32', value, self.line, self.column)
+          return reader.Token('FLOAT32_LITERAL', value, self.line, self.column)
         case _:
           # Error - shouldn't be able to get here
           pass

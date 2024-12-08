@@ -7,7 +7,7 @@ from collections import deque
 
 from co.ast import AstNode
 from co.types import TypeNode, ArrayTypeNode, PointerTypeNode, TypealiasTypeNode
-from co.st import Scope, ConstantSymbol, FunctionSymbol, VariableSymbol, TypeSymbol
+from co.st import Scope, FunctionSymbol, VariableSymbol, TypeSymbol
 from co.st import ClassSymbol, PrimitiveSymbol, StructureSymbol, UnionSymbol
 
 
@@ -17,10 +17,14 @@ from co.st import ClassSymbol, PrimitiveSymbol, StructureSymbol, UnionSymbol
 
 class Pass2:
 
-  def __init__ (self, builtin_scope: Scope):
+  def __init__ (self, root_node: AstNode, builtin_scope: Scope):
     # Might not need scopes this round
+    self.root_node = root_node
     self.builtin_scope: Scope = builtin_scope
     self.current_scope: Scope = builtin_scope
+
+  def process (self):
+    self.translationUnit(self.root_node)
 
   # BEGIN
 
@@ -66,32 +70,32 @@ class Pass2:
         print(f"No matching type {node.kind}")
 
   def arrayType (self, node: AstNode):
-    # The size might not matter as far as the type goes.
-    # We would still need to check the size to make sure it is a
-    # compile-time integral constant, however.
-    # sizeNode = node.get_child(0)
-    # TO DO - NEEDS TO BE FIXED
-    ref_node = node.child()
-    self.type(ref_node)
-    t = TypeNode('array')
-    t.add_child(ref_node.attribute('type'))
-    node.set_attribute('type', t)
+    # We still need to check the size to make sure it is a compile-
+    # time integral constant.
+    size_node = node.child(0)
+    base_type_node = node.child(1)
+    # This should really be a compile-time constant expression. But
+    # we need to determine if it is a valid compile-time constant
+    # (that is also an integer) by semantic analysis.
+    size = size_node.token.lexeme
+    self.type(base_type_node)
+    type = ArrayTypeNode(size, base_type_node.attribute('type'))
+    node.set_attribute('type', type)
 
   def nominalType (self, node: AstNode):
-    # Should the name be directly in the node, or should it be a
-    # child node?
-    name = node.token.lexeme
-    symbol: TypeSymbol = self.current_scope.resolve(name)
-    t = symbol.type
-    node.set_attribute('type', t)
+    type_name = node.token.lexeme
+    symbol: TypeSymbol = self.current_scope.resolve(type_name)
+    type = symbol.type
+    node.set_attribute('type', type)
 
   def pointerType (self, node: AstNode):
-    ref_node = node.child()
-    self.type(ref_node)
-    t = PointerTypeNode(ref_node.attribute('type'))
-    node.set_attribute('type', t)
+    base_type_node = node.child()
+    self.type(base_type_node)
+    type = PointerTypeNode(base_type_node.attribute('type'))
+    node.set_attribute('type', type)
 
   def primitiveType (self, node: AstNode):
-    name = node.token.lexeme
-    symbol: TypeSymbol = self.builtin_scope.resolve(name)
-    node.set_attribute('type', symbol.type)
+    type_name = node.token.lexeme
+    symbol: TypeSymbol = self.builtin_scope.resolve(type_name)
+    type = symbol.type
+    node.set_attribute('type', type)

@@ -3,6 +3,7 @@ from typing import List
 from collections import deque
 
 from co import reader
+from co.reader import Parser, Pass1, Pass2, Pass3a, Pass3b, Pass4a, Pass4b
 
 from co import st
 from co import ast
@@ -38,17 +39,20 @@ lexer.setInput(content)
 # print(t)
 
 # Create parser
-parser = reader.Parser()
-parser.setInput(lexer)
-root = parser.translationUnit()
+parser = Parser(lexer)
+root = parser.process()
 
-# pass0 = reader.Pass0()
+pass1 = Pass1(root)
+pass1.process()
 
-pass1 = reader.Pass1()
-pass1.translationUnit(root)
+pass2 = Pass2(root, pass1.builtin_scope)
+pass2.process()
 
-pass2 = reader.Pass2(pass1.builtin_scope)
-pass2.translationUnit(root)
+pass3a = Pass3a(root)
+pass3a.process()
 
-pass3 = reader.Pass3(pass1.builtin_scope)
-pass3.translationUnit(root)
+pass3b = Pass3b(root)
+pass3b.process()
+
+pass4a = Pass4a(root)
+pass4a.process()

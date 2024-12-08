@@ -9,7 +9,10 @@ from co import st
 
 class Parser:
 
-  def __init__ (self, input: Lexer):
+  def __init__ (self):
+    pass
+
+  def setInput(self, input: Lexer):
     self.input: Lexer = input
     self.k: int = 3
     self.p: int = 0
@@ -20,37 +23,31 @@ class Parser:
     for i in range(self.k):
       t = self.input.getToken()
       self.buffer.append(t)
-    self.lookahead = self.peekahead(0)
+    # self.current = self.lookahead(0)
     # Old, remove once predictive parser works
     # self.lookahead: Token = self.input.getToken()
 
   def match (self, kind: str):
-    if self.lookahead.kind == kind:
+    if self.lookahead().kind == kind:
       self.consume()
     else:
-      msg = f"Invalid token. Expected {kind}, got {self.lookahead.kind}."
+      msg = f"Invalid token. Expected {kind}, got {self.lookahead().kind}."
       # Should this really be an exception, or should we do sync recovery?
       raise Exception(msg)
 
   def consume (self):
     self.buffer[self.p] = self.input.getToken()
     self.p = (self.p + 1) % self.k
-    self.lookahead = self.peekahead(0)
+    # self.current = self.lookahead(0)
     # Old, remove once predictive parser works
     # self.lookahead = self.input.getToken()
 
-  def peekahead (self, index: int):
+  def lookahead (self, index: int = 0):
     return self.buffer[(self.p + index) % self.k]
-
-  def process (self):
-    n = self.translationUnit()
-    return n
-
-  # BEGIN
 
   def translationUnit (self) -> ast.AstNode:
     n = ast.AstNode('TranslationUnit')
-    while self.lookahead.kind != 'EOF':
+    while self.lookahead().kind != 'EOF':
       n.add_child(self.declaration())
     return n
 
@@ -64,11 +61,18 @@ class Parser:
     # To do: Need to pass modifiers in or append, possibly use k lookahead
     # if self.lookahead.kind in [ 'PRIVATE', 'PUBLIC', 'STATIC' ]:
     #   p = self.modifierList()
-    match self.lookahead.kind:
+    match self.lookahead().kind:
       case 'CLASS':
         n = self.classDeclaration()
       case 'CONST':
-        n = self.constantDeclaration()
+        # Left off here
+        t = self.lookahead(1)
+        print(t)
+        if t.kind == 'VAL' or t.kind == 'VAR':
+          # Use variable declaration final?
+          n = self.variableDeclaration()
+        elif t.kind == 'DEF':
+          n = self.functionDeclaration()
       case 'DEF':
         n = self.functionDeclaration()
       case 'STRUCT':
@@ -114,47 +118,48 @@ class Parser:
     #     pass
     # return n
 
+  # k > 1 lookahead would be nice here, but should we require it?
+
   def constantDeclaration (self) -> ast.AstNode:
     self.match('CONST')
-    match self.lookahead.kind:
-      case 'DEF':
-        n = self.functionDeclarationConstant()
-      case 'VAL':
-        n = self.variableDeclarationConstant()
-      case 'VAR':
-        n = self.variableDeclarationConstant()
-      case _:
-        # How to handle this... create error node? Enter panic mode
-        # and look for synchronizing token?
-        print("error: No match in constant declaration")
-        n = None
+    # Defer creation of a constant node
+    if self.lookahead.kind == 'DEF':
+      # This is a const function
+      # n = self.functionDeclarationConstant()
+      pass
+    else:
+      if self.lookahead.kind == 'VAL':
+        self.match('VAL')
+      elif self.lookahead.kind == 'VAR':
+        self.match('VAR')
+      n = self.variableDeclarationConstant()
     return n
 
-  def variableDeclarationConstant (self) -> ast.AstNode:
-    n = ast.AstNode('VariableDeclaration')
-    # Do we need to set tokens on every node?
-    # n.set_token(self.lookahead)
-    if self.lookahead.kind == 'VAL':
-      self.match('VAL')
-    else:
-      self.match('VAR')
-    n.set_attribute('is_constant', True)
-    n.add_child(self.name())
-    # Optional type specifier
-    # In rust, const declaration requires the type specifier.
-    if self.lookahead.kind == 'COLON':
-      self.match('COLON')
-      n.add_child(self.type())
-    else:
-      n.add_child(None)
-    # Required initializer
-    if self.lookahead.kind == 'EQUAL':
-      self.match('EQUAL')
-      n.add_child(self.expressionRoot())
-    else:
-      print("Error - missing initializer in constant variable definition")
-    self.match('SEMICOLON')
-    return n
+
+
+  # Needs rework for compile-time constants. The 'const' keyword
+  # might become a modifier.
+  # def constantDeclaration (self) -> ast.AstNode:
+  #   n = ast.AstNode('ConstantDeclaration')
+  #   self.match('CONST')
+  #   if self.lookahead.kind == 'IDENTIFIER':
+  #     n.add_child(self.name())
+  #   else:
+  #     self.error('IDENTIFIER')
+  #   # Optional type specifier
+  #   if self.lookahead.kind == 'COLON':
+  #     self.match('COLON')
+  #     n.add_child(self.type())
+  #   else:
+  #     n.add_child(None)
+  #   # Required initializer
+  #   if self.lookahead.kind == 'EQUAL':
+  #     self.match('EQUAL')
+  #     n.add_child(self.expression())
+  #   else:
+  #     print("Error - missing initializer in constant definition")
+  #   self.match('SEMICOLON')
+  #   return n
 
   # Unlike java, final variables must be initialized at the time of
   # declaration.
@@ -163,20 +168,20 @@ class Parser:
     n = ast.AstNode('VariableDeclaration')
     self.match('VAL')
     n.set_attribute('is_final', True)
-    if self.lookahead.kind == 'IDENTIFIER':
+    if self.lookahead().kind == 'IDENTIFIER':
       n.add_child(self.name())
     else:
       self.error('IDENTIFIER')
     # Optional type specifier
-    if self.lookahead.kind == 'COLON':
+    if self.lookahead().kind == 'COLON':
       self.match('COLON')
       n.add_child(self.type())
     else:
       n.add_child(None)
     # Required initializer
-    if self.lookahead.kind == 'EQUAL':
+    if self.lookahead().kind == 'EQUAL':
       self.match('EQUAL')
-      n.add_child(self.expressionRoot())
+      n.add_child(self.expression())
     else:
       print("Error - missing initializer in final variable definition")
     self.match('SEMICOLON')
@@ -186,23 +191,22 @@ class Parser:
     n = ast.AstNode('VariableDeclaration')
     self.match('VAR')
     n.set_attribute('is_final', False)
-    if self.lookahead.kind == 'IDENTIFIER':
+    if self.lookahead().kind == 'IDENTIFIER':
       n.add_child(self.name())
     else:
       self.error('IDENTIFIER')
     # Optional type specifier
-    if self.lookahead.kind == 'COLON':
+    if self.lookahead().kind == 'COLON':
       self.match('COLON')
       n.add_child(self.type())
     else:
       n.add_child(None)
     # Optional initializer
-    if self.lookahead.kind == 'EQUAL':
+    if self.lookahead().kind == 'EQUAL':
       self.match('EQUAL')
-      n.add_child(self.expressionRoot())
-    # else:
-    #   # Are we sure we want to add None children?
-    #   n.add_child(None)
+      n.add_child(self.expression())
+    else:
+      n.add_child(None)
     self.match('SEMICOLON')
     return n
 
@@ -359,6 +363,10 @@ class Parser:
       'FLOAT32_LITERAL',
       'FLOAT64_LITERAL'
     ]
+    # declarationFirstSet = [
+    #   'VAL',
+    #   'VAR'
+    # ]
     match self.lookahead.kind:
       case 'BREAK':
         n = self.breakStatement()
@@ -421,7 +429,7 @@ class Parser:
 
   def expressionStatement (self) -> ast.AstNode:
     n = ast.AstNode('ExpressionStatement')
-    n.add_child(self.expressionRoot())
+    n.add_child(self.expression())
     self.match('SEMICOLON')
     return n
 
@@ -431,7 +439,7 @@ class Parser:
     self.match('L_PARENTHESIS')
     n.add_child(self.name())
     self.match('IN')
-    n.add_child(self.expressionRoot())
+    n.add_child(self.expression())
     self.match('R_PARENTHESIS')
     if self.lookahead.kind == 'L_BRACE':
       n.add_child(self.block())
@@ -443,7 +451,7 @@ class Parser:
     n = ast.AstNode('IfStatement')
     self.match('IF')
     self.match('L_PARENTHESIS')
-    n.add_child(self.expressionRoot())
+    n.add_child(self.expression())
     self.match('R_PARENTHESIS')
     if self.lookahead.kind == 'L_BRACE':
       n.add_child(self.block())
@@ -457,13 +465,13 @@ class Parser:
     if self.lookahead.kind == 'L_PARENTHESIS':
       self.match('L_PARENTHESIS')
       # Init expression
-      n.add_child(self.expressionRoot())
+      n.add_child(self.expression())
       self.match('SEMICOLON')
       # Cond expression
-      n.add_child(self.expressionRoot())
+      n.add_child(self.expression())
       self.match('SEMICOLON')
       # Loop expression
-      n.add_child(self.expressionRoot())
+      n.add_child(self.expression())
       self.match('R_PARENTHESIS')
     if self.lookahead.kind == 'L_BRACE':
       n.add_child(self.block())
@@ -480,7 +488,7 @@ class Parser:
   def returnStatement (self) -> ast.AstNode:
     n = ast.AstNode('ReturnStatement')
     self.match('RETURN')
-    n.add_child(self.expressionRoot())
+    n.add_child(self.expression())
     self.match('SEMICOLON')
     return n
 
@@ -488,7 +496,7 @@ class Parser:
     n = ast.AstNode('WhileStatement')
     self.match('WHILE')
     self.match('L_PARENTHESIS')
-    n.add_child(self.expressionRoot())
+    n.add_child(self.expression())
     self.match('R_PARENTHESIS')
     if self.lookahead.kind == 'L_BRACE':
       n.add_child(self.block())
@@ -498,16 +506,10 @@ class Parser:
   
   # EXPRESSIONS
 
-  def expressionRoot (self) -> ast.AstNode:
-    # Create Expression root node here
-    n = ast.AstNode('ExpressionRoot')
-    n.add_child(self.expression())
-    return n
-
   def expression (self) -> ast.AstNode:
     n = self.assignmentExpression()
     return n
-
+  
   def assignmentExpression (self) -> ast.AstNode:
     n = self.logicalOrExpression()
     firstSet = [
@@ -688,10 +690,6 @@ class Parser:
     return n
 
   def nameExpression (self) -> ast.AstNode:
-    # We need to distinguish between identifiers used when defining
-    # program elements and identifiers used when referencing program
-    # elements. An alternative is to use a form of tree pattern
-    # matching.
     n = self.name()
     firstSet = ['L_PARENTHESIS', 'L_BRACKET', 'MINUS_GREATER', 'PERIOD']
     while self.lookahead.kind in firstSet:
@@ -707,12 +705,6 @@ class Parser:
           n = self.fieldAccess(p)
     return n
 
-  # def identifier (self) -> ast.AstNode:
-  #   n = ast.AstNode('Identifier')
-  #   n.set_token(self.lookahead)
-  #   self.match('IDENTIFIER')
-  #   return n
-  
   def functionCall (self, p: ast.AstNode) -> ast.AstNode:
     n = ast.AstNode('FunctionCall')
     n.add_child(p)
@@ -914,7 +906,7 @@ class Parser:
     # integer expression that can be evaluated at compile time.
     # Evaluation can occur during semantic analysis phase. For now,
     # just accept a literal.
-    n.add_child(self.expressionRoot())
+    n.add_child(self.literal())
     self.match('R_BRACKET')
     return n
 

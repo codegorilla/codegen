@@ -35,8 +35,6 @@ class Pass3b:
     self.search(self.root_node)
     self.logger.print()
 
-  # BEGIN
-
   def search (self, node: AstNode):
     match node.kind:
       case 'VariableDeclaration':
@@ -45,7 +43,10 @@ class Pass3b:
         self.arrayType(node)
     # Continue search
     for child_node in node.children:
-      self.search(child_node)
+      if child_node:
+        self.search(child_node)
+
+  # DECLARATIONS
 
   def variableDeclaration (self, node: AstNode):
     # For now, only worry about global variables.
@@ -57,6 +58,8 @@ class Pass3b:
         message = Message('error', "global initializer expression must be constant")
         message.set_line(init_node.child().token.line)
         self.logger.add_message(message)
+
+  # TYPES
 
   def arrayType (self, node: AstNode):
     # Ensure array size expression evaluates to constant

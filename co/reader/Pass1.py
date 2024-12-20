@@ -113,7 +113,7 @@ class Pass1:
   def process (self):
     self.translationUnit(self.root_node)
 
-  # BEGIN
+  # TRANSLATION UNIT
 
   def translationUnit (self, node: AstNode):
     # Create and push global scope
@@ -305,29 +305,39 @@ class Pass1:
       self.member(member_node)
 
   def variableDeclaration (self, node: AstNode):
-    # Example of inherited attribute. Should we just set it on the
-    # name node during parsing (or in a previous pass) instead?
-    # Perhaps it depends on how/when modifiers are processed. Should
-    # we process modifiers in this pass or a previous pass?
-    name_node = node.child(0)
-    name_node.set_attribute('is_constant', node.attribute('is_constant'))
-    name_node.set_attribute('is_final', node.attribute('is_final'))
-    self.variableName(name_node)
+    self.variableName(node.child(0), node)
+    # This was used when type specifier could be 'None'. Going
+    # forward, it looks like we need to make it a real (placeholder)
+    # node because we need to be able to set attributes on it, such
+    # as its computed type when doing type inference.
+    # spec_node = node.child(1)
+    # if spec_node:
+    #   self.type(spec_node)
     self.type(node.child(1))
-    # Initializer is optional
+    # Initializer is optional in some cases, so we need to check for
+    # its existence.
     if node.child_count() == 3:
       self.expressionRoot(node.child(2))
 
-  def variableName (self, node: AstNode):
+  # Should we create parent node links in AST nodes or just rely on
+  # passing them in during traversals? For now, pass them in via
+  # traversals on an as-needed basis because it is relatively rare
+  # that parent links are needed. If we find them being needed more
+  # often, then we can add parent links in the future.
+
+  # As a general rule, we want parent and child nodes to be read-only
+  # when being processed by a their own child and parent nodes,
+  # respectively.
+
+  def variableName (self, node: AstNode, parent_node: AstNode):
     name = node.token.lexeme
     if self.current_scope.is_defined(name):
       print(f"error ({node.token.line}): symbol '{name}' already defined")
     else:
       symbol = VariableSymbol(name)
-      if node.attribute('is_constant'):
-        symbol.set_constant(True)
-      if node.attribute('is_final'):
-        symbol.set_final(True)
+      symbol.set_declaration(parent_node)
+      symbol.set_constant(parent_node.attribute('is_constant') == True)
+      symbol.set_final(parent_node.attribute('is_final') == True)
       self.current_scope.define(symbol)
       node.set_attribute('symbol', symbol)
       # Should we also set scope attribute too? See Parr, pg. 168. If
@@ -342,8 +352,9 @@ class Pass1:
 # TYPES
 
   def type (self, node: AstNode):
-    if node.kind == 'ArrayType':
-      self.arrayType(node)
+    match node.kind:
+      case 'ArrayType':
+        self.arrayType(node)
 
   def arrayType (self, node: AstNode):
     # Might be incompletely specified (e.g. int[]), but assume fully
@@ -377,3 +388,4 @@ class Pass1:
 
   def unaryExpression (self, node: AstNode):
     self.expression(node.child())
+

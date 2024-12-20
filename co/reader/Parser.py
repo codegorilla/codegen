@@ -50,8 +50,26 @@ class Parser:
 
   def translationUnit (self) -> ast.AstNode:
     n = ast.AstNode('TranslationUnit')
+    # For now the package clause is optional. If not specified then
+    # it is assumed to be the name of the directory that the source
+    # file is located in. The exception to that might be the main
+    # package because it might not be in a directory named 'main'.
+    # UPDATE: Intentions are to remove the package declaration if
+    # possible. A package will just be a directory full of source
+    # files. The name of the package is the directory name in which
+    # the source file(s) are located.
+    if self.lookahead.kind == 'PACKAGE':
+      n.add_child(self.packageClause())
     while self.lookahead.kind != 'EOF':
       n.add_child(self.declaration())
+    return n
+
+  def packageClause (self) -> ast.AstNode:
+    n = ast.AstNode('PackageClause')
+    self.match('PACKAGE')
+    # For now, ignore any package name nesting
+    n.add_child(self.name())
+    self.match('SEMICOLON')
     return n
 
   # DECLARATIONS
@@ -79,8 +97,10 @@ class Parser:
         n = self.unionDeclaration()
       case 'VAL':
         n = self.variableDeclarationFinal()
+        n.set_attribute('is_global', True)
       case 'VAR':
         n = self.variableDeclaration()
+        n.set_attribute('is_global', True)
       case _:
         # Replace with exception
         print("error: invalid declaration" + self.lookahead.kind)
@@ -134,6 +154,8 @@ class Parser:
     n = ast.AstNode('VariableDeclaration')
     # Do we need to set tokens on every node?
     # n.set_token(self.lookahead)
+    # We might only allow constant objects to be vals in the future.
+    # For now, allow val or var.
     if self.lookahead.kind == 'VAL':
       self.match('VAL')
     else:
@@ -146,7 +168,7 @@ class Parser:
       self.match('COLON')
       n.add_child(self.type())
     else:
-      n.add_child(None)
+      n.add_child(self.alphaType())
     # Required initializer
     if self.lookahead.kind == 'EQUAL':
       self.match('EQUAL')
@@ -172,7 +194,7 @@ class Parser:
       self.match('COLON')
       n.add_child(self.type())
     else:
-      n.add_child(None)
+      n.add_child(self.alphaType())
     # Required initializer
     if self.lookahead.kind == 'EQUAL':
       self.match('EQUAL')
@@ -185,6 +207,7 @@ class Parser:
   def variableDeclaration (self) -> ast.AstNode:
     n = ast.AstNode('VariableDeclaration')
     self.match('VAR')
+    n.set_attribute('is_constant', False)
     n.set_attribute('is_final', False)
     if self.lookahead.kind == 'IDENTIFIER':
       n.add_child(self.name())
@@ -195,15 +218,17 @@ class Parser:
       self.match('COLON')
       n.add_child(self.type())
     else:
-      n.add_child(None)
+      n.add_child(self.alphaType())
     # Optional initializer
     if self.lookahead.kind == 'EQUAL':
       self.match('EQUAL')
       n.add_child(self.expressionRoot())
-    # else:
-    #   # Are we sure we want to add None children?
-    #   n.add_child(None)
     self.match('SEMICOLON')
+    return n
+
+  def alphaType (self):
+    # Used for type inference on variable declarations
+    n = ast.AstNode('AlphaType')
     return n
 
   def functionDeclaration (self) -> ast.AstNode:
@@ -650,7 +675,7 @@ class Parser:
   
   def unaryExpression (self) -> ast.AstNode:
     # Need to add tilde
-    firstSet = ['ASTERISK', 'MINUS', 'EXCLAMATION']
+    firstSet = ['ASTERISK', 'MINUS', 'PLUS', 'EXCLAMATION']
     if self.lookahead.kind in firstSet:
       n = ast.AstNode('UnaryExpression')
       n.set_token(self.lookahead)

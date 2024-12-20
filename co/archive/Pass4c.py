@@ -28,7 +28,7 @@ from co.st import ClassSymbol, PrimitiveSymbol, StructureSymbol, UnionSymbol
 # 3. Can we just recurse through looking for type nodes and
 # expression nodes, or do we need to descend methodically?
 
-class Pass4b:
+class Pass4c:
 
   def __init__ (self, builtin_scope: Scope):
     self.builtin_scope: Scope = builtin_scope

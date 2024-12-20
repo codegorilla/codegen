@@ -1,20 +1,27 @@
+//package com.cobalt.hello;
 
-var x: int32 = 1 < 1.5;
+/*
+// 2
+const val t = x;
 
-//const val x: int32 = y;
+// 4
+var a = y;
 
-//const val y: int32 = x;
+// 3
+const var y = x + t;
+
+// 1
+const val x = 1.5f + 1;
+*/
 
 
-//var t: int32[x-1];
+def myfun (x: int, y: float) -> void {
+  var a = 1;
+  var b: int32 = 1;
+  var c = 2.5;
+}
 
-//const var x: int = 1;
 
-//val y: int = 2;
-
-//var a: *int32;
-
-//var b: int64[5];
 
 //typealias matrix = float32[5];
 
@@ -23,19 +30,6 @@ var x: int32 = 1 < 1.5;
 //var d: bool = false;
 
 //var e: null_t = null;
-
-/*
-var a2: int8;
-var a3: int16;
-var a4: int32;
-var a5: int64;
-var a6: uint8;
-var a7: uint16;
-var a8: uint32;
-var a9: uint64;
-var a10: float32;
-var a11: float64;
-*/
 
 //typealias int = int32;
 
@@ -60,10 +54,6 @@ struct Y {
   y: float;
 }
 
-def myfun (x: int, y: float) -> void {
-//  var x: int = 1;
-  var t: int = 2.5;
-}
 */
 
 //var a: *float[2];

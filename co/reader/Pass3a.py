@@ -22,16 +22,15 @@ class Pass3a:
     # Search for expression roots
     self.search(self.root_node)
 
-  # BEGIN
-
   def search (self, node: AstNode):
     if node.kind == 'ExpressionRoot':
       self.expressionRoot(node)
     else:
       for child_node in node.children:
-        if child_node == None:
-          print("FOUND NONE!")
-        self.search(child_node)
+        if child_node:
+          self.search(child_node)
+
+  # EXPRESSIONS
 
   def expressionRoot (self, node: AstNode):
     expr_node = node.child()

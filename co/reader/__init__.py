@@ -9,4 +9,7 @@ from co.reader.Pass2 import Pass2
 from co.reader.Pass3a import Pass3a
 from co.reader.Pass3b import Pass3b
 from co.reader.Pass4a import Pass4a
-from co.reader.Pass4b import Pass4b
+from co.reader.Pass5 import Pass5
+from co.reader.Pass5a import Pass5a
+from co.reader.Pass5b import Pass5b
+from co.reader.Pass5c import Pass5c

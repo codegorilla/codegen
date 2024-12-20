@@ -3,7 +3,8 @@ from typing import List
 from collections import deque
 
 from co import reader
-from co.reader import Parser, Pass1, Pass2, Pass3a, Pass3b, Pass4a, Pass4b
+from co.reader import Parser, Pass1, Pass2, Pass3a, Pass3b, Pass4a
+from co.reader import Pass5a, Pass5b, Pass5c
 
 from co import st
 from co import ast
@@ -27,20 +28,14 @@ print(content)
 
 # Create lexer
 lexer = reader.Lexer()
-
-# lexer.setInput("var x: **(*int[5])[10][20];")
-# lexer.setInput("var x: fn (int, float) -> int;")
-# lexer.setInput("var x: int = 1.5 + 2;")
-# lexer.setInput("== = break breaks 0b1011 || |= = ==")
-
 lexer.setInput(content)
-
-# t = lexer.getToken()
-# print(t)
 
 # Create parser
 parser = Parser(lexer)
 root = parser.process()
+
+# To do: For each source file in the package, we parse it and add it to a
+# package AstNode.
 
 pass1 = Pass1(root)
 pass1.process()
@@ -56,3 +51,15 @@ pass3b.process()
 
 pass4a = Pass4a(root)
 pass4a.process()
+
+# pass4b = Pass4b(root, pass4a.decl_list)
+# pass4b.process()
+
+pass5a = Pass5a(root, pass4a.decl_list)
+pass5a.process()
+
+pass5b = Pass5b(root)
+pass5b.process()
+
+pass5c = Pass5c(root)
+pass5c.process()

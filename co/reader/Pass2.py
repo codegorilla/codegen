@@ -26,7 +26,7 @@ class Pass2:
   def process (self):
     self.translationUnit(self.root_node)
 
-  # BEGIN
+  # TRANSLATION UNIT
 
   def translationUnit (self, node: AstNode):
     self.current_scope = node.attribute('scope')

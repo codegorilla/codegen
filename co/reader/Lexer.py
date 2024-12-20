@@ -87,6 +87,7 @@ keyword_lookup = {
   'loop': 'LOOP',
   'null': 'NULL',
   'or': 'OR',
+  'package': 'PACKAGE',
   'return': 'RETURN',
   'struct': 'STRUCT',
   'then': 'THEN',
@@ -308,9 +309,9 @@ class Lexer:
           self.consume()
           if self.current == '=':
             self.consume()
-            return reader.Token('TILDE', '!=', self.line, self.column)
+            return reader.Token('TILDE_EQUAL', '~=', self.line, self.column)
           else:
-            return reader.Token('TILDE_EQUAL', '!', self.line, self.column)
+            return reader.Token('TILDE', '~', self.line, self.column)
 
         case '"':
           # String

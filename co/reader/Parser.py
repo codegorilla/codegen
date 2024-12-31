@@ -141,8 +141,10 @@ class Parser:
         n = self.functionDeclarationConstant()
       case 'VAL':
         n = self.variableDeclarationConstant()
+        n.set_attribute('is_global', True)
       case 'VAR':
         n = self.variableDeclarationConstant()
+        n.set_attribute('is_global', True)
       case _:
         # How to handle this... create error node? Enter panic mode
         # and look for synchronizing token?
@@ -166,9 +168,9 @@ class Parser:
     # In rust, const declaration requires the type specifier.
     if self.lookahead.kind == 'COLON':
       self.match('COLON')
-      n.add_child(self.type())
+      n.add_child(self.typeRoot())
     else:
-      n.add_child(self.alphaType())
+      n.add_child(self.typeRootEmpty())
     # Required initializer
     if self.lookahead.kind == 'EQUAL':
       self.match('EQUAL')
@@ -192,9 +194,9 @@ class Parser:
     # Optional type specifier
     if self.lookahead.kind == 'COLON':
       self.match('COLON')
-      n.add_child(self.type())
+      n.add_child(self.typeRoot())
     else:
-      n.add_child(self.alphaType())
+      n.add_child(self.typeRootEmpty())
     # Required initializer
     if self.lookahead.kind == 'EQUAL':
       self.match('EQUAL')
@@ -216,19 +218,14 @@ class Parser:
     # Optional type specifier
     if self.lookahead.kind == 'COLON':
       self.match('COLON')
-      n.add_child(self.type())
+      n.add_child(self.typeRoot())
     else:
-      n.add_child(self.alphaType())
+      n.add_child(self.typeRootEmpty())
     # Optional initializer
     if self.lookahead.kind == 'EQUAL':
       self.match('EQUAL')
       n.add_child(self.expressionRoot())
     self.match('SEMICOLON')
-    return n
-
-  def alphaType (self):
-    # Used for type inference on variable declarations
-    n = ast.AstNode('AlphaType')
     return n
 
   def functionDeclaration (self) -> ast.AstNode:
@@ -241,8 +238,9 @@ class Parser:
     n.add_child(self.parameterList())
     if self.lookahead.kind == 'MINUS_GREATER':
       self.match('MINUS_GREATER')
-      n.add_child(self.type())
+      n.add_child(self.typeRoot())
     else:
+      # To do: Need to add a type root parent
       p = ast.AstNode('VoidType')
       n.add_child(p)
     n.add_child(self.functionBody())
@@ -263,7 +261,7 @@ class Parser:
     n = ast.AstNode('Parameter')
     n.add_child(self.name())
     self.match('COLON')
-    n.add_child(self.type())
+    n.add_child(self.typeRoot())
     return n
 
   def functionBody (self) -> ast.AstNode:
@@ -330,7 +328,7 @@ class Parser:
     n = ast.AstNode('StructureMember')
     n.add_child(self.name())
     self.match('COLON')
-    n.add_child(self.type())
+    n.add_child(self.typeRoot())
     self.match('SEMICOLON')
     return n
 
@@ -339,7 +337,7 @@ class Parser:
     self.match('TYPEALIAS')
     n.add_child(self.name())
     self.match('EQUAL')
-    n.add_child(self.type())
+    n.add_child(self.typeRoot())
     self.match('SEMICOLON')
     return n
 
@@ -362,7 +360,7 @@ class Parser:
     n = ast.AstNode('UnionMember')
     n.add_child(self.name())
     self.match('COLON')
-    n.add_child(self.type())
+    n.add_child(self.typeRoot())
     self.match('SEMICOLON')
     return n
 
@@ -524,7 +522,7 @@ class Parser:
   # EXPRESSIONS
 
   def expressionRoot (self) -> ast.AstNode:
-    # Create Expression root node here
+    # Create expression root node here
     n = ast.AstNode('ExpressionRoot')
     n.add_child(self.expression())
     return n
@@ -857,6 +855,16 @@ class Parser:
     return n
 
   # TYPES
+
+  def typeRoot (self) -> ast.AstNode:
+    # Create type root node here
+    n = ast.AstNode('TypeRoot')
+    n.add_child(self.type())
+    return n
+
+  def typeRootEmpty (self) -> ast.AstNode:
+    n = ast.AstNode('TypeRoot')
+    return n
 
   def type (self) -> ast.AstNode:
     combined: deque[ast.AstNode] = self.directType()

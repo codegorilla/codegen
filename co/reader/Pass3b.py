@@ -1,71 +1,159 @@
-from co.ast import AstNode
-from co.reader import Logger, Message
-from co.st import Scope, FunctionSymbol, VariableSymbol
-from co.st import ClassSymbol, PrimitiveSymbol, StructureSymbol, UnionSymbol
+from enum import Enum
+from typing import List
+from collections import deque
 
+import graphlib
+from graphlib import TopologicalSorter
+
+from co.ast import AstNode
+from co.types import TypeNode, ArrayTypeNode, PointerTypeNode, PrimitiveTypeNode
+from co.st import Scope, FunctionSymbol, VariableSymbol, TypeSymbol
+from co.st import ClassSymbol, PrimitiveSymbol, StructureSymbol, UnionSymbol
+from co.reader import Logger, Message
+from co.reader import PrimitiveType
 
 # Purpose:
-# 1. Validate that constant variables, any global variables, and
-# array sizes are initialized with compile-time constant expressions.
 
-# Description:
-# This works by searching for designated variable declaration nodes
-# and checking if their initializer expressions evaluate to
-# compile-time constants.
+# Look for circular references in global variable definitions.
 
-# Notes:
-# Semantic rules that must be followed:
-# - All global variable initializers must be compile-time constants.
-# - All array sizes must be compile-time constants.
-# - If a local variable is declared constant, then its initializer
-#   must be a compile-time constant.
-# - A non-final, non-constant global variable does not require an
-#   initializer.
+# Non-existent variable references was taken care of in Pass 3a for
+# global variables. Should it be taken care of here instead?
+
+# Global variable declarations may occur in any order. We must create
+# a dependency graph so that we can perform a topological sort. If
+# the sort fails, then at least one circular reference exists.
+
+# To create the dependency graph, we traverse all global variable
+# declarations that have initializers. In the intializer expressions,
+# we find all references to other nodes and add them as dependencies
+# of the current global variable.
 
 class Pass3b:
 
   def __init__ (self, root_node: AstNode):
     self.root_node = root_node
     self.logger = Logger()
+    # Sorter is a dependency graph of variable declarations
+    self.sorter = TopologicalSorter()
+    self.decl_list: List[AstNode] = None
 
   def process (self):
-    # Search for variable declaration nodes. For now just search for
-    # any globals, but eventually we need local constant variables
-    # too.
-    self.search(self.root_node)
-    self.logger.print()
+    # Build global variable dependency graph
+    self.translationUnit(self.root_node)
+    # Perform topological sort on dependency graph
+    try:
+      self.decl_list = list(self.sorter.static_order())
+      # The list should include ALL global variables, not just those
+      # with dependencies.
+      # print(f"size of list is {len(self.decl_list)}")
+    except graphlib.CycleError as error:
+      decl_node = error.args[1][-1]
+      name_node = decl_node.child()
+      print(f"error({name_node.token.line}): circular name definition: {name_node.token.lexeme}")
 
-  def search (self, node: AstNode):
+  # TRANSLATION UNIT
+
+  def translationUnit (self, node: AstNode):
+    for decl_node in node.children:
+      self.declaration(decl_node)
+
+  # DECLARATIONS
+      
+  def declaration (self, node: AstNode):
+    # Dispatch method
     match node.kind:
       case 'VariableDeclaration':
         self.variableDeclaration(node)
-      case 'ArrayType':
-        self.arrayType(node)
-    # Continue search
-    for child_node in node.children:
-      if child_node:
-        self.search(child_node)
-
-  # DECLARATIONS
 
   def variableDeclaration (self, node: AstNode):
-    # For now, only worry about global variables.
-    # Ensure initializer expression evaluates to constant
+    # Add this declaration to dependency graph. This ensures that the
+    # declaration appears in the graph even if it has no dependencies
+    # in its type specifier or initializer. That way, the graph and
+    # subsequent sorted list contains a complete list of all global
+    # variable declarations, which will be needed in a later pass.
+    self.sorter.add(node)
+    # If type specifier exists then compute dependency list and add
+    # dependencies to dependency graph. If initializer exists then
+    # compute dependency list and add dependencies to dependency
+    # graph. The only dependencies that can come from the type
+    # specifier are those associated with array size specifiers.
+    spec_node = node.child(1)
+    if spec_node.child_count():
+      self.typeRoot(spec_node)
+      dep_list: List[AstNode] = spec_node.attribute('dep_list')
+      for dep_node in dep_list:
+        self.sorter.add(node, dep_node)
     if node.child_count() == 3:
       init_node = node.child(2)
-      is_constant = init_node.attribute('is_constant')
-      if not is_constant:
-        message = Message('error', "global initializer expression must be constant")
-        message.set_line(init_node.child().token.line)
-        self.logger.add_message(message)
+      self.expressionRoot(init_node)
+      # Dep list is a list of symbols that this declaration is
+      # dependent upon.
+      dep_list: List[AstNode] = init_node.attribute('dep_list')
+      for dep_node in dep_list:
+        self.sorter.add(node, dep_node)
 
-  # TYPES
+  # EXPRESSIONS
+
+  def expressionRoot (self, node: AstNode):
+    dep_list = self.expression(node.child())
+    node.set_attribute('dep_list', dep_list)
+
+  def expression (self, node: AstNode) -> List[AstNode]:
+    # Dispatch method
+    match node.kind:
+      case 'BinaryExpression':
+        return self.binaryExpression(node)
+      case 'UnaryExpression':
+        return self.unaryExpression(node)
+      case 'Name':
+        return self.name(node)
+      case _:
+        return []
+
+  def binaryExpression (self, node: AstNode) -> List[AstNode]:
+    return self.expression(node.child(0)) + self.expression(node.child(1))
+
+  def unaryExpression (self, node: AstNode) -> List[AstNode]:
+    return self.expression(node.child())
+
+  def name (self, node: AstNode) -> List[AstNode]:
+    # Look up name in symbol table
+    scope: Scope = node.attribute('scope')
+    symbol: VariableSymbol = scope.resolve(node.token.lexeme)
+    if symbol:
+      # Add this node as dependency of current declaration node
+      return [ symbol.declaration ]
+    else:
+      # It's possible that the name wasn't declared, which is an error.
+      # However, we might just wait until pass4b to actually print this
+      # error because that pass handles all name expressions, not just
+      # those without type specifiers.
+      # print(f"error: name {name} not declared.")
+      # Also, this might have already been handled by Pass 3a.
+      return []
+
+# TYPES
+
+  # Array types can have expressions in their size specifiers, so we
+  # need to build dependency lists for these as well.
+
+  def typeRoot (self, node: AstNode):
+    dep_list = self.type(node.child())
+    node.set_attribute('dep_list', dep_list)
+
+  def type (self, node: AstNode):
+    match node.kind:
+      case 'ArrayType':
+        return self.arrayType(node)
+      case 'PointerType':
+        return self.pointerType(node)
+      case _:
+        return []
 
   def arrayType (self, node: AstNode):
-    # Ensure array size expression evaluates to constant
-    size_node = node.child(0)
-    is_constant = size_node.attribute('is_constant')
-    if not is_constant:
-      message = Message('error', "array size must be constant")
-      message.set_line(size_node.child().token.line)
-      self.logger.add_message(message)
+    expr_root_node = node.child(0)
+    self.expressionRoot(expr_root_node)
+    return expr_root_node.attribute('dep_list') + self.type(node.child(1))
+
+  def pointerType (self, node: AstNode):
+    return self.type(node.child())

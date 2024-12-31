@@ -170,39 +170,39 @@ class Lexer:
           self.consume()
           if self.current == '=':
             self.consume()
-            return reader.Token('EQUAL_EQUAL', '==', self.line, self.column)
+            return reader.Token('EQUAL_EQUAL', '==', self.position, self.line, self.column)
           else:
-            return reader.Token('EQUAL', '=', self.line, self.column)
+            return reader.Token('EQUAL', '=', self.position, self.line, self.column)
 
         case '|':
           self.consume()
           if self.current == '|':
             self.consume()
-            return reader.Token('BAR_BAR', '||', self.line, self.column)
+            return reader.Token('BAR_BAR', '||', self.position, self.line, self.column)
           elif self.current == '=':
             self.consume()
-            return reader.Token('BAR_EQUAL', '|=', self.line, self.column)
+            return reader.Token('BAR_EQUAL', '|=', self.position, self.line, self.column)
           else:
-            return reader.Token('BAR', '|', self.line, self.column)
+            return reader.Token('BAR', '|', self.position, self.line, self.column)
 
         case '^':
           self.consume()
           if self.current == '=':
             self.consume()
-            return reader.Token('CARET_EQUAL', '^=', self.line, self.column)
+            return reader.Token('CARET_EQUAL', '^=', self.position, self.line, self.column)
           else:
-            return reader.Token('CARET', '^', self.line, self.column)
+            return reader.Token('CARET', '^', self.position, self.line, self.column)
 
         case '&':
           self.consume()
           if self.current == '&':
             self.consume()
-            return reader.Token('AMPERSAND_AMPERSAND', '&&', self.line, self.column)
+            return reader.Token('AMPERSAND_AMPERSAND', '&&', self.position, self.line, self.column)
           elif self.current == '=':
             self.consume()
-            return reader.Token('AMPERSAND_EQUAL', '&=', self.line, self.column)
+            return reader.Token('AMPERSAND_EQUAL', '&=', self.position, self.line, self.column)
           else:
-            return reader.Token('AMPERSAND', '&', self.line, self.column)
+            return reader.Token('AMPERSAND', '&', self.position, self.line, self.column)
 
         case '>':
           self.consume()
@@ -210,68 +210,84 @@ class Lexer:
             self.consume()
             if self.current == '=':
               self.consume()
-              return reader.Token('GREATER_GREATER_EQUAL', '>>=', self.line, self.column)
+              return reader.Token('GREATER_GREATER_EQUAL', '>>=', self.position, self.line, self.column)
             else:
-              return reader.Token('GREATER_GREATER', '>>', self.line, self.column)
+              return reader.Token('GREATER_GREATER', '>>', self.position, self.line, self.column)
           elif self.current == '=':
             self.consume()
-            return reader.Token('GREATER_EQUAL', '>=', self.line, self.column)
+            return reader.Token('GREATER_EQUAL', '>=', self.position, self.line, self.column)
           else:
-            return reader.Token('GREATER', '>', self.line, self.column)
+            return reader.Token('GREATER', '>', self.position, self.line, self.column)
 
         case '<':
           self.consume()
           if self.current == '<':
             self.consume()
             if self.current == '=':
-              return reader.Token('LESS_LESS_EQUAL', '<<=', self.line, self.column)
+              return reader.Token('LESS_LESS_EQUAL', '<<=', self.position, self.line, self.column)
             else:
-              return reader.Token('LESS_LESS', '<<', self.line, self.column)
+              return reader.Token('LESS_LESS', '<<', self.position, self.line, self.column)
           elif self.current == '=':
             self.consume()
-            return reader.Token('LESS_EQUAL', '<=', self.line, self.column)
+            return reader.Token('LESS_EQUAL', '<=', self.position, self.line, self.column)
           else:
-            return reader.Token('LESS', '<', self.line, self.column)
+            return reader.Token('LESS', '<', self.position, self.line, self.column)
 
         case '+':
           self.consume()
           if self.current == '=':
             self.consume()
-            return reader.Token('PLUS_EQUAL', '+=', self.line, self.column)
+            return reader.Token('PLUS_EQUAL', '+=', self.position, self.line, self.column)
           else:
-            return reader.Token('PLUS', '+', self.line, self.column)
+            return reader.Token('PLUS', '+', self.position, self.line, self.column)
 
         case '-':
           self.consume()
           if self.current == '>':
             self.consume()
-            return reader.Token('MINUS_GREATER', '->', self.line, self.column)
+            return reader.Token('MINUS_GREATER', '->', self.position, self.line, self.column)
           elif self.current == '=':
             self.consume()
-            return reader.Token('MINUS_EQUAL', '-=', self.line, self.column)
+            return reader.Token('MINUS_EQUAL', '-=', self.position, self.line, self.column)
           else:
-            return reader.Token('MINUS', '-', self.line, self.column)
+            return reader.Token('MINUS', '-', self.position, self.line, self.column)
 
         case '*':
           self.consume()
           if self.current == '=':
             self.consume()
-            return reader.Token('ASTERISK_EQUAL', '*=', self.line, self.column)
+            return reader.Token('ASTERISK_EQUAL', '*=', self.position, self.line, self.column)
           else:
-            return reader.Token('ASTERISK', '*', self.line, self.column)
+            return reader.Token('ASTERISK', '*', self.position, self.line, self.column)
 
         case '/':
           self.consume()
           if self.current == '=':
             self.consume()
-            return reader.Token('SLASH_EQUAL', '/=', self.line, self.column)
+            return reader.Token('SLASH_EQUAL', '/=', self.position, self.line, self.column)
           elif self.current == '*':
             # Block comment
             self.consume()
             comment_done = False
             while not comment_done:
               while self.current != '*' and self.current != 'EOF':
-                self.consume()
+                if self.current == '\n':
+                  # Skip line feeds (LF)
+                  self.consume()
+                  self.line += 1
+                  self.column = 0
+                elif self.current == '\r':
+                  # Skip carriage return + line feed (CR+LF) pairs
+                  self.consume()
+                  if self.current == '\n':
+                    self.consume()
+                    self.line += 1
+                    self.column = 0
+                  else:
+                    # Found carriage return (CR) by itself, which is invalid
+                    print("error: invalid line ending")
+                else:
+                  self.consume()
               while self.current == '*':
                 self.consume()
               if self.current == '/':
@@ -287,31 +303,31 @@ class Lexer:
             while self.current != '\n' and self.current != '\r' and self.current != 'EOF':
               self.consume()
           else:
-            return reader.Token('SLASH', '/', self.line, self.column)
+            return reader.Token('SLASH', '/', self.position, self.line, self.column)
 
         case '%':
           self.consume()
           if self.current == '=':
             self.consume()
-            return reader.Token('PERCENT_EQUAL', '%=', self.line, self.column)
+            return reader.Token('PERCENT_EQUAL', '%=', self.position, self.line, self.column)
           else:
-            return reader.Token('PERCENT', '%', self.line, self.column)
+            return reader.Token('PERCENT', '%', self.position, self.line, self.column)
 
         case '!':
           self.consume()
           if self.current == '=':
             self.consume()
-            return reader.Token('EXCLAMATION_EQUAL', '!=', self.line, self.column)
+            return reader.Token('EXCLAMATION_EQUAL', '!=', self.position, self.line, self.column)
           else:
-            return reader.Token('EXCLAMATION', '!', self.line, self.column)
+            return reader.Token('EXCLAMATION', '!', self.position, self.line, self.column)
 
         case '~':
           self.consume()
           if self.current == '=':
             self.consume()
-            return reader.Token('TILDE_EQUAL', '~=', self.line, self.column)
+            return reader.Token('TILDE_EQUAL', '~=', self.position, self.line, self.column)
           else:
-            return reader.Token('TILDE', '~', self.line, self.column)
+            return reader.Token('TILDE', '~', self.position, self.line, self.column)
 
         case '"':
           # String
@@ -323,7 +339,7 @@ class Lexer:
             self.consume()
             end = self.position
             value = self.input[begin:end]
-            return reader.Token('STRING_LITERAL', value, self.line, self.column)
+            return reader.Token('STRING_LITERAL', value, self.position, self.line, self.column)
           elif self.current == 'EOF':
             # Todo: Probably should pretend the terminator is there and return token
             print("error: missing string terminator")
@@ -338,56 +354,56 @@ class Lexer:
             self.consume()
             end = self.position
             value = self.input[begin:end]
-            return reader.Token('CHARACTER_LITERAL', value, self.line, self.column)
+            return reader.Token('CHARACTER_LITERAL', value, self.position, self.line, self.column)
           elif self.current == 'EOF':
             # Todo: Probably should pretend the terminator is there and return token
             print("error: missing character terminator")
 
         case ':':
           self.consume()
-          return reader.Token('COLON', ':', self.line, self.column)
+          return reader.Token('COLON', ':', self.position, self.line, self.column)
 
         case ';':
           self.consume()
-          return reader.Token('SEMICOLON', ';', self.line, self.column)
+          return reader.Token('SEMICOLON', ';', self.position, self.line, self.column)
 
         case '.':
           self.consume()
           if self.current == '.':
             self.consume()
-            return reader.Token('PERIOD_PERIOD', '..', self.line, self.column)
+            return reader.Token('PERIOD_PERIOD', '..', self.position, self.line, self.column)
           elif self.is_dec_digit(self.current):
             return self.number() 
           else:
-            return reader.Token('PERIOD', '.', self.line, self.column)
+            return reader.Token('PERIOD', '.', self.position, self.line, self.column)
 
         case ',':
           self.consume()
-          return reader.Token('COMMA', ',', self.line, self.column)
+          return reader.Token('COMMA', ',', self.position, self.line, self.column)
 
         case '{':
           self.consume()
-          return reader.Token('L_BRACE', '{', self.line, self.column)
+          return reader.Token('L_BRACE', '{', self.position, self.line, self.column)
 
         case '}':
           self.consume()
-          return reader.Token('R_BRACE', '}', self.line, self.column)
+          return reader.Token('R_BRACE', '}', self.position, self.line, self.column)
 
         case '[':
           self.consume()
-          return reader.Token('L_BRACKET', '[', self.line, self.column)
+          return reader.Token('L_BRACKET', '[', self.position, self.line, self.column)
 
         case ']':
           self.consume()
-          return reader.Token('R_BRACKET', ']', self.line, self.column)
+          return reader.Token('R_BRACKET', ']', self.position, self.line, self.column)
 
         case '(':
           self.consume()
-          return reader.Token('L_PARENTHESIS', '(', self.line, self.column)
+          return reader.Token('L_PARENTHESIS', '(', self.position, self.line, self.column)
 
         case ')':
           self.consume()
-          return reader.Token('R_PARENTHESIS', ')', self.line, self.column)
+          return reader.Token('R_PARENTHESIS', ')', self.position, self.line, self.column)
 
         case '0':
           self.consume()
@@ -417,7 +433,7 @@ class Lexer:
             self.column = 0
 
         case '\r':
-          # Skip carriage return + line feed pairs (CR+LF)
+          # Skip carriage return + line feed (CR+LF) pairs
           while self.current == '\r':
             self.consume()
             if self.current == '\n':
@@ -426,7 +442,8 @@ class Lexer:
               self.column = 0
             else:
               # Should return an error token here maybe
-              print("ERROR")
+              # Found carriage return (CR) by itself, which is invalid
+              print("error: invalid line ending")
 
         case _:
           if self.current.isalpha() or self.current == '_':
@@ -438,15 +455,15 @@ class Lexer:
             end = self.position
             id = self.input[begin:end]
             if id in keyword_lookup.keys():
-              return reader.Token(keyword_lookup[id], id, self.line, self.column)
+              return reader.Token(keyword_lookup[id], id, self.position, self.line, self.column)
             else:
-              return reader.Token('IDENTIFIER', id, self.line, self.column)
+              return reader.Token('IDENTIFIER', id, self.position, self.line, self.column)
           elif self.current.isdigit():
             return self.number()
           else:
             print("ERROR")
 
-    return reader.Token('EOF', '', self.line, self.column)
+    return reader.Token('EOF', '', self.position, self.line, self.column)
 
   def binary_integer (self) -> reader.Token:
     # Note: We arrive at this function after lookahead or
@@ -505,7 +522,7 @@ class Lexer:
             # Accept
             end = self.position
             value = self.input[begin:end]
-            return reader.Token('BINARY_INT32_LITERAL', value, self.line, self.column)
+            return reader.Token('BINARY_INT32_LITERAL', value, self.position, self.line, self.column)
         case State.BIN_500:
           if self.is_bin_digit(self.current):
             self.consume()
@@ -529,7 +546,7 @@ class Lexer:
             # Accept
             end = self.position
             value = self.input[begin:end]
-            return reader.Token('BINARY_INT64_LITERAL', value, self.line, self.column)
+            return reader.Token('BINARY_INT64_LITERAL', value, self.position, self.line, self.column)
         case State.BIN_700:
           if self.current == 'L':
             self.consume()
@@ -538,12 +555,12 @@ class Lexer:
             # Accept
             end = self.position
             value = self.input[begin:end]
-            return reader.Token('BINARY_UINT32_LITERAL', value, self.line, self.column)
+            return reader.Token('BINARY_UINT32_LITERAL', value, self.position, self.line, self.column)
         case State.BIN_800:
             # Accept
             end = self.position
             value = self.input[begin:end]
-            return reader.Token('BINARY_UINT64_LITERAL', value, self.line, self.column)
+            return reader.Token('BINARY_UINT64_LITERAL', value, self.position, self.line, self.column)
         case _:
           # Invalid state. Can only be reached through a lexer bug.
           print("error: Invalid state.")
@@ -605,7 +622,7 @@ class Lexer:
             # Accept
             end = self.position
             value = self.input[begin:end]
-            return reader.Token('OCTAL_INT32_LITERAL', value, self.line, self.column)
+            return reader.Token('OCTAL_INT32_LITERAL', value, self.position, self.line, self.column)
         case State.OCT_500:
           if self.is_oct_digit(self.current):
             self.consume()
@@ -629,7 +646,7 @@ class Lexer:
             # Accept
             end = self.position
             value = self.input[begin:end]
-            return reader.Token('OCTAL_INT64_LITERAL', value, self.line, self.column)
+            return reader.Token('OCTAL_INT64_LITERAL', value, self.position, self.line, self.column)
         case State.OCT_700:
           if self.current == 'L':
             self.consume()
@@ -638,12 +655,12 @@ class Lexer:
             # Accept
             end = self.position
             value = self.input[begin:end]
-            return reader.Token('OCTAL_UINT32_LITERAL', value, self.line, self.column)
+            return reader.Token('OCTAL_UINT32_LITERAL', value, self.position, self.line, self.column)
         case State.OCT_800:
             # Accept
             end = self.position
             value = self.input[begin:end]
-            return reader.Token('OCTAL_UINT64', value, self.line, self.column)
+            return reader.Token('OCTAL_UINT64', value, self.position, self.line, self.column)
         case _:
           # Invalid state. Can only be reached through a lexer bug.
           print("error: Invalid state.")
@@ -712,7 +729,7 @@ class Lexer:
             # Accept
             end = self.position
             value = self.input[begin:end]
-            return reader.Token('HEXADECIMAL_INT32_LITERAL', value, self.line, self.column)
+            return reader.Token('HEXADECIMAL_INT32_LITERAL', value, self.position, self.line, self.column)
         case State.HEX_200:
           if self.is_hex_digit(self.current):
             self.consume()
@@ -738,7 +755,7 @@ class Lexer:
           else:
             end = self.position
             value = self.input[begin:end]
-            return reader.Token('HEXADECIMAL_INT64_LITERAL', value, self.line, self.column)
+            return reader.Token('HEXADECIMAL_INT64_LITERAL', value, self.position, self.line, self.column)
         case State.HEX_220:
           if self.current == 'L':
             self.consume()
@@ -746,11 +763,11 @@ class Lexer:
           else:
             end = self.position
             value = self.input[begin:end]
-            return reader.Token('HEXADECIMAL_UINT32_LITERAL', value, self.line, self.column)
+            return reader.Token('HEXADECIMAL_UINT32_LITERAL', value, self.position, self.line, self.column)
         case State.HEX_230:
           end = self.position
           value = self.input[begin:end]
-          return reader.Token('HEXADECIMAL_UINT64_LITERAL', value, self.line, self.column)
+          return reader.Token('HEXADECIMAL_UINT64_LITERAL', value, self.position, self.line, self.column)
         case State.HEX_300:
           if self.is_hex_digit(self.current):
             self.consume()
@@ -771,7 +788,7 @@ class Lexer:
           else:
             end = self.position
             value = self.input[begin:end]
-            return reader.Token('HEXADECIMAL_FLOAT64', value, self.line, self.column)
+            return reader.Token('HEXADECIMAL_FLOAT64', value, self.position, self.line, self.column)
         case State.HEX_500:
           if self.is_hex_digit(self.current):
             self.consume()
@@ -817,15 +834,15 @@ class Lexer:
           else:
             end = self.position
             value = self.input[begin:end]
-            return reader.Token('HEXADECIMAL_FLOAT64', value, self.line, self.column)
+            return reader.Token('HEXADECIMAL_FLOAT64', value, self.position, self.line, self.column)
         case State.HEX_810:
           end = self.position
           value = self.input[begin:end]
-          return reader.Token('HEXADECIMAL_FLOAT64', value, self.line, self.column)
+          return reader.Token('HEXADECIMAL_FLOAT64', value, self.position, self.line, self.column)
         case State.HEX_820:
           end = self.position
           value = self.input[begin:end]
-          return reader.Token('HEXADECIMAL_FLOAT32', value, self.line, self.column)
+          return reader.Token('HEXADECIMAL_FLOAT32', value, self.position, self.line, self.column)
         case _:
           # Error - shouldn't be able to get here
           pass
@@ -874,7 +891,7 @@ class Lexer:
           else:
             end = self.position
             value = self.input[begin:end]
-            return reader.Token('INT32_LITERAL', value, self.line, self.column)
+            return reader.Token('INT32_LITERAL', value, self.position, self.line, self.column)
         case State.NUM_200:
           if self.is_dec_digit(self.current):
             self.consume()
@@ -906,7 +923,7 @@ class Lexer:
           else:
             end = self.position
             value = self.input[begin:end]
-            return reader.Token('INT64_LITERAL', value, self.line, self.column)
+            return reader.Token('INT64_LITERAL', value, self.position, self.line, self.column)
         case State.NUM_220:
           if self.current == 'L':
             self.consume()
@@ -914,11 +931,11 @@ class Lexer:
           else:
             end = self.position
             value = self.input[begin:end]
-            return reader.Token('UINT32_LITERAL', value, self.line, self.column)
+            return reader.Token('UINT32_LITERAL', value, self.position, self.line, self.column)
         case State.NUM_230:
           end = self.position
           value = self.input[begin:end]
-          return reader.Token('UINT64_LITERAL', value, self.line, self.column)
+          return reader.Token('UINT64_LITERAL', value, self.position, self.line, self.column)
         case State.NUM_300:
           if self.is_dec_digit(self.current):
             self.consume()
@@ -945,7 +962,7 @@ class Lexer:
           else:
             end = self.position
             value = self.input[begin:end]
-            return reader.Token('FLOAT64_LITERAL', value, self.line, self.column)
+            return reader.Token('FLOAT64_LITERAL', value, self.position, self.line, self.column)
         case State.NUM_500:
           if self.is_dec_digit(self.current):
             self.consume()
@@ -997,15 +1014,15 @@ class Lexer:
           else:
             end = self.position
             value = self.input[begin:end]
-            return reader.Token('FLOAT64_LITERAL', value, self.line, self.column)
+            return reader.Token('FLOAT64_LITERAL', value, self.position, self.line, self.column)
         case State.NUM_810:
           end = self.position
           value = self.input[begin:end]
-          return reader.Token('FLOAT64_LITERAL', value, self.line, self.column)
+          return reader.Token('FLOAT64_LITERAL', value, self.position, self.line, self.column)
         case State.NUM_820:
           end = self.position
           value = self.input[begin:end]
-          return reader.Token('FLOAT32_LITERAL', value, self.line, self.column)
+          return reader.Token('FLOAT32_LITERAL', value, self.position, self.line, self.column)
         case _:
           # Error - shouldn't be able to get here
           pass

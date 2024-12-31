@@ -14,16 +14,17 @@ from co.st import ClassSymbol, StructureSymbol, UnionSymbol, TypeSymbol
 # 2. Define primitive type symbols
 # 3. Define nominal type symbols
 # 3. Define variable symbols
-# 4. Prepare variable name references to be resolved
+# 4. Check for illegal redefinition of names
+# 5. Prepare variable name references to be resolved
 
 # Not sure if we need to define function symbols here too.
 
 # Should we process modifiers in this pass?
 
-# We only need to create the symbol table entries for variables. We
-# do not need to set their types, which will be done in a later pass.
-# This needs to be done in a later pass because types can be omitted
-# when using type inference.
+# Important: We only need to create the symbol table entries for
+# variables. We do NOT need to set their types, which will be done in
+# later passes. This needs to be done in a later pass because types
+# can be omitted when using type inference.
 
 # I don't think this is true anymore:
 # We only need to define symbols that represent types in this pass.
@@ -306,14 +307,7 @@ class Pass1:
 
   def variableDeclaration (self, node: AstNode):
     self.variableName(node.child(0), node)
-    # This was used when type specifier could be 'None'. Going
-    # forward, it looks like we need to make it a real (placeholder)
-    # node because we need to be able to set attributes on it, such
-    # as its computed type when doing type inference.
-    # spec_node = node.child(1)
-    # if spec_node:
-    #   self.type(spec_node)
-    self.type(node.child(1))
+    self.typeRoot(node.child(1))
     # Initializer is optional in some cases, so we need to check for
     # its existence.
     if node.child_count() == 3:
@@ -340,27 +334,32 @@ class Pass1:
       symbol.set_final(parent_node.attribute('is_final') == True)
       self.current_scope.define(symbol)
       node.set_attribute('symbol', symbol)
-      # Should we also set scope attribute too? See Parr, pg. 168. If
-      # we set scope attribute on appropriate nodes, then there is no
-      # need to keep track of current scope in future passes.
-      # We might not need to set it on variableName because we
-      # already have the symbol as an attribute. But we should
-      # probably set it on names in expressions because we still need
-      # to be able to resolve those names.
+      # Should we also set scope attribute too? See Parr, pg. 168. We
+      # might not need to set it on variableName because we already
+      # have the symbol as an attribute.
       # node.set_attribute('scope', self.current_scope)
 
 # TYPES
+
+  def typeRoot (self, node: AstNode):
+    if node.child_count():
+      self.type(node.child())
 
   def type (self, node: AstNode):
     match node.kind:
       case 'ArrayType':
         self.arrayType(node)
+      case 'PointerType':
+        self.pointerType(node)
 
   def arrayType (self, node: AstNode):
     # Might be incompletely specified (e.g. int[]), but assume fully
     # specified for now.
     self.expressionRoot(node.child(0))
     self.type(node.child(1))
+
+  def pointerType (self, node: AstNode):
+    self.type(node.child())
 
 # STATEMENTS
 
@@ -377,7 +376,8 @@ class Pass1:
         self.unaryExpression(node)
       case 'Name':
         self.name(node)
-      # There are additional node kinds that we need to address
+      # To do: There may be additional node kinds that we need to
+      # address.
 
   def binaryExpression (self, node: AstNode):
     self.expression(node.child(0))

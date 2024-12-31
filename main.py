@@ -3,8 +3,9 @@ from typing import List
 from collections import deque
 
 from co import reader
-from co.reader import Parser, Pass1, Pass2, Pass3a, Pass3b, Pass4a
-from co.reader import Pass5a, Pass5b, Pass5c
+from co.reader import Parser, Pass1, Pass2
+from co.reader import Pass3a, Pass3b
+from co.reader import Pass4a, Pass4b, Pass4c, Pass4d
 
 from co import st
 from co import ast
@@ -22,7 +23,7 @@ from co.types import FunctionTypeNode
 
 
 # Load input from file
-with open('test.co.txt', 'r') as file:
+with open('test.co.txt', 'rt', newline='') as file:
   content = file.read()
 print(content)
 
@@ -49,17 +50,18 @@ pass3a.process()
 pass3b = Pass3b(root)
 pass3b.process()
 
-pass4a = Pass4a(root)
-pass4a.process()
+# pass4a = Pass4a(root)
+# pass4a.process()
 
 # pass4b = Pass4b(root, pass4a.decl_list)
 # pass4b.process()
 
-pass5a = Pass5a(root, pass4a.decl_list)
-pass5a.process()
+# pass4c = Pass4c(root)
+# pass4c.process()
 
-pass5b = Pass5b(root)
-pass5b.process()
+# pass5c = Pass5c(root)
+# pass5c.process()
 
-pass5c = Pass5c(root)
-pass5c.process()
+# pass5d = Pass5d(root)
+# pass5d.process()
+

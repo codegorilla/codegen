@@ -10,41 +10,28 @@ from co.st import Scope, FunctionSymbol, VariableSymbol, TypeSymbol
 from co.st import ClassSymbol, PrimitiveSymbol, StructureSymbol, UnionSymbol
 from co.reader import Logger, Message
 from co.reader import PrimitiveType
+from co.reader import Pass4
 
 # Purpose:
 
-# I believe this is not needed anymore. We created a topologically
-# sorted list of all global variables in pass 3b. That is all we need
-# to start determining type information.
+# For each local variable declaration, if it has an initializer,
+# compute the type of the initializer expression. If it has a type
+# specifier, compute its type from the type specifier. Otherwise set
+# its type as the type of the initializer expression.
 
-# 1. Compute types of global variables that have type specifiers.
-# 2. Create list of global variables that do not have type specifiers
-# and perform topological sort on it.
+## that has an initializer,
+## compute the type of its initializer expression. If no type
+## specifier exists, use the computed type of the initialier
+## expression to infer the type of the variable. Then update the type
+## specifier and symbol table entry.
 
-# Global variable declarations may occur in any order. We must create
-# a dependency graph so that we can perform a topological sort. This
-# will allow us to determine (in a later pass) the type of each
-# variable when type inference is used.
-
-# To create the dependency graph, we traverse all global variable
-# declarations that have initializers. In the intializer expressions,
-# we find all references to other nodes and add them as dependencies
-# of the current global variable.
-
-class Pass4a:
+class Pass4c (Pass4):
 
   def __init__ (self, root_node: AstNode):
-    self.root_node = root_node
-    self.logger = Logger()
-    # Sorter is a dependency graph of variable declarations
-    self.sorter = TopologicalSorter()
-    self.decl_list: List[AstNode] = None
+    super().__init__(root_node)
 
   def process (self):
-    # Build global variable dependency graph
     self.translationUnit(self.root_node)
-    # Perform topological sort on dependency graph
-    self.decl_list = list(self.sorter.static_order())
     self.logger.print()
 
   # TRANSLATION UNIT
@@ -58,29 +45,51 @@ class Pass4a:
   def declaration (self, node: AstNode):
     # Dispatch method
     match node.kind:
-      case 'VariableDeclaration':
-        self.variableDeclaration(node)
+      case 'FunctionDeclaration':
+        self.functionDeclaration(node)
+
+  def functionDeclaration (self, node: AstNode):
+    self.functionBody(node.child(3))
+
+  def functionBody (self, node: AstNode):
+    self.topBlock(node.child())
+
+  def topBlock (self, node: AstNode):
+    for stmt_node in node.children:
+      self.statement(stmt_node)
 
   def variableDeclaration (self, node: AstNode):
+    print("var decl")
     spec_node = node.child(1)
-    # If type specifier exists, then compute the type expression and
-    # update the variable's symbol to match. Otherwise, add this
-    # declaration node to the dependency graph. We need to pass down
-    # the current declaration node so that we can add to its
-    # dependency list.
-    if spec_node.child_count():
+    has_type_specifier = spec_node.child_count()
+    has_initializer = node.child_count() == 3
+    if has_type_specifier:
+      # Compute type of type specifier. Inherit type to name node in
+      # preparation for updating symbol table entry.
       self.typeRoot(spec_node)
       name_node = node.child(0)
       name_node.set_attribute('type', spec_node.attribute('type'))
       self.variableName(name_node)
+      if has_initializer:
+        # Compute type of initializer
+        init_node = node.child(2)
+        self.expressionRoot(init_node)
     else:
-      init_node = node.child(2)
-      self.expressionRoot(init_node)
-      # Dep list is a list of symbols that this declaration is
-      # dependent upon.
-      dep_list: List[AstNode] = init_node.attribute('dep_list')
-      for dep_node in dep_list:
-        self.sorter.add(node, dep_node)
+      if has_initializer:
+        print("HERE")
+        # Compute type of initializer. Inherit type to spec node, and
+        # then name node in preparation for updating symbol table
+        # entry.
+        init_node = node.child(2)
+        self.expressionRoot(init_node)
+        spec_node.set_attribute('type', init_node.attribute('type'))
+        name_node = node.child(0)
+        name_node.set_attribute('type', spec_node.attribute('type'))
+        self.variableName(name_node)
+      else:
+        # This is an error condition. This scenario should never be
+        # possible, and thus should never occur.
+        pass
 
   def variableName (self, node: AstNode):
     # Update symbol
@@ -88,50 +97,18 @@ class Pass4a:
     type = node.attribute('type')
     symbol.set_type(type)
 
-  # We aren't trying to compute the type yet. We just need to build a
-  # graph of dependencies so that we can do a topological sort. The
-  # dependencies are the declarations that the current declaration
-  # depends on.
+  # STATEMENTS
 
-  # EXPRESSIONS
+  def statement (self, node: AstNode):
+    if node.kind == 'DeclarationStatement':
+      self.declarationStatement(node)
 
-  def expressionRoot (self, node: AstNode):
-    dep_list = self.expression(node.child())
-    node.set_attribute('dep_list', dep_list)
-
-  def expression (self, node: AstNode) -> List[AstNode]:
-    # Dispatch method
-    match node.kind:
-      case 'BinaryExpression':
-        return self.binaryExpression(node)
-      case 'UnaryExpression':
-        return self.unaryExpression(node)
-      case 'Name':
-        return self.name(node)
-      case _:
-        return []
-
-  def binaryExpression (self, node: AstNode) -> List[AstNode]:
-    return self.expression(node.child(0)) + self.expression(node.child(1))
-
-  def unaryExpression (self, node: AstNode) -> List[AstNode]:
-    return self.expression(node.child())
-
-  def name (self, node: AstNode) -> List[AstNode]:
-    # Look up name in symbol table
-    name = node.token.lexeme
-    scope: Scope = node.attribute('scope')
-    symbol: VariableSymbol = scope.resolve(name)
-    if symbol:
-      # Add this node as dependency of current declaration node
-      return [ symbol.declaration ]
-    else:
-    # It's possible that the name wasn't declared, which is an error.
-    # However, we might just wait until pass4b to actually print this
-    # error because that pass handles all name expressions, not just
-    # those without type specifiers.
-    # print(f"error: name {name} not declared.")
-      return []
+  def declarationStatement (self, node: AstNode):
+    # Need to get child in this case
+    child_node = node.child()
+    match child_node.kind:
+      case 'VariableDeclaration':
+        self.variableDeclaration(child_node)
 
 # TYPES
 

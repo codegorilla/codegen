@@ -42,7 +42,7 @@ class Pass2:
   def typealiasDeclaration (self, node: AstNode):
     name_node = node.child(0)
     type_node = node.child(1)
-    self.type(type_node)
+    self.typeRoot(type_node)
     # Do we set the type on the name node or update its symbol in the
     # symbol table, or both? I believe in the case of a typealias, we
     # just need to update its symbol in the symbol table because we
@@ -56,46 +56,49 @@ class Pass2:
 
   # TYPES
 
-  def type (self, node: AstNode):
+  # Note: The type root for a type alias cannot be empty. It must
+  # have a valid child.
+
+  def typeRoot (self, node: AstNode):
+    type = self.type(node.child())
+    node.set_attribute('type', type)
+    # print(node.attribute('type'))
+
+  def type (self, node: AstNode) -> TypeNode:
     match node.kind:
       case 'ArrayType':
-        self.arrayType(node)
+        return self.arrayType(node)
       case 'NominalType':
-        self.nominalType(node)
+        return self.nominalType(node)
       case 'PointerType':
-        self.pointerType(node)
+        return self.pointerType(node)
       case 'PrimitiveType':
-        self.primitiveType(node)
+        return self.primitiveType(node)
       case _:
         print(f"No matching type {node.kind}")
 
-  def arrayType (self, node: AstNode):
+  def arrayType (self, node: AstNode) -> TypeNode:
     # We still need to check the size to make sure it is a compile-
     # time integral constant.
     size_node = node.child(0)
-    base_type_node = node.child(1)
     # This should really be a compile-time constant expression. But
     # we need to determine if it is a valid compile-time constant
     # (that is also an integer) by semantic analysis.
     size = size_node.token.lexeme
-    self.type(base_type_node)
-    type = ArrayTypeNode(size, base_type_node.attribute('type'))
-    node.set_attribute('type', type)
+    base_type = self.type(node.child(1))
+    return ArrayTypeNode(size, base_type)
 
-  def nominalType (self, node: AstNode):
+  def nominalType (self, node: AstNode) -> TypeNode:
     type_name = node.token.lexeme
     symbol: TypeSymbol = self.current_scope.resolve(type_name)
-    type = symbol.type
-    node.set_attribute('type', type)
+    return symbol.type
 
-  def pointerType (self, node: AstNode):
-    base_type_node = node.child()
-    self.type(base_type_node)
-    type = PointerTypeNode(base_type_node.attribute('type'))
-    node.set_attribute('type', type)
+  def pointerType (self, node: AstNode) -> TypeNode:
+    base_type = self.type(node.child())
+    return PointerTypeNode(base_type)
 
-  def primitiveType (self, node: AstNode):
+  def primitiveType (self, node: AstNode) -> TypeNode:
+    # Could alternatively do node.token.kind instead
     type_name = node.token.lexeme
     symbol: TypeSymbol = self.builtin_scope.resolve(type_name)
-    type = symbol.type
-    node.set_attribute('type', type)
+    return symbol.type

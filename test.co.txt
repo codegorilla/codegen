@@ -1,5 +1,14 @@
 //package com.cobalt.hello;
 
+//typealias int = int32;
+
+
+var s: int32 = t;
+
+var x: int32 = s;
+
+var t: int32 = 1;
+
 /*
 // 2
 const val t = x;
@@ -8,18 +17,29 @@ const val t = x;
 var a = y;
 
 // 3
-const var y = x + t;
+const var y = x + t + 1;
 
 // 1
 const val x = 1.5f + 1;
+
+var z = 1;
 */
 
+var k: int32 = 1;
 
 def myfun (x: int, y: float) -> void {
-  var a = 1;
-  var b: int32 = 1;
-  var c = 2.5;
+  var a: int32 = k;
+  var tt: int32;
+  
+//  var a = z;
+//  var b: int32 = 1;
+//  var c = 2.5;
 }
+
+
+/*
+*/
+
 
 
 

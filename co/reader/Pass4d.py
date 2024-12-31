@@ -10,20 +10,20 @@ from co.st import Scope, FunctionSymbol, VariableSymbol, TypeSymbol
 from co.st import ClassSymbol, PrimitiveSymbol, StructureSymbol, UnionSymbol
 from co.reader import Logger, Message
 from co.reader import PrimitiveType
-from co.reader import Pass5
+from co.reader import Pass4
 
 # Purpose:
 
 # For each expression, determine if its type has already been
 # computed. If not, compute the type of the expression.
 
-class Pass5c (Pass5):
+class Pass4d (Pass4):
 
   def __init__ (self, root_node: AstNode):
     super().__init__(root_node)
 
   def process (self):
-    print("Pass 5c")
+    print("Pass 4d")
     self.search(self.root_node)
     self.logger.print()
 

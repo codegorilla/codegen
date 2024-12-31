@@ -1,66 +1,79 @@
-from enum import Enum
-from typing import List
-from collections import deque
-
-from graphlib import TopologicalSorter
-
 from co.ast import AstNode
-from co.types import TypeNode, ArrayTypeNode, PointerTypeNode, PrimitiveTypeNode
-from co.st import Scope, FunctionSymbol, VariableSymbol, TypeSymbol
+from co.st import Scope, FunctionSymbol, VariableSymbol
 from co.st import ClassSymbol, PrimitiveSymbol, StructureSymbol, UnionSymbol
-from co.reader import Logger, Message
-from co.reader import PrimitiveType
-from co.reader import Pass5
+
 
 # Purpose:
+# 1. Determine if expressions are compile-time constants
 
-# For each global variable declaration that has an initializer,
-# compute the type of its initializer expression. If no type
-# specifier exists, use the computed type of the initialier
-# expression to infer the type of the variable. Then update the type
-# specifier and symbol table entry.
+# Description:
+# This works by searching for expression root nodes. These are the
+# top-most nodes in an expression tree. For each expression root node
+# found, we perform a post-order traversal to compute the
+# 'is_constant' attribute for each node, in bottom-up fashion, ending
+# with the expression root node itself.
 
-# Note that all global variable initializers must be constant
-# expressions, meaning that their values and types can be computed at
-# compile time. However, global variables may be declared out of
-# order (whereas local variables follow the normal declare-before-use
-# rule). In order to determine the correct ordering, we must do a
-# topological sort and check for any cycles. We may be able to do
-# this with DFS or Khan's algorithm.
+class Pass5a:
 
-# Expressions will often contain references to variables. Therefore,
-# to compute expression types, we first need to know the types of
-# variables. However, due to type inference, some variable types are
-# unknown. So we need to compute the expression types for their
-# initializers first, so that we can compute their types. Thus, the
-# first things we must compute are initializer expression types.
-
-class Pass5a (Pass5):
-
-  def __init__ (self, root_node: AstNode, decl_list: List[AstNode]):
-    super().__init__(root_node)
-    self.decl_list = decl_list
+  def __init__ (self, root_node: AstNode):
+    self.root_node = root_node
 
   def process (self):
-    # We need to process global variables that require type inference
-    # first. This way, the types of all global variables will be
-    # known in advance. We need to know these in advance because
-    # global variables are not required to be declared before use, so
-    # their order of declaration may differ significantly from their
-    # order of use. In contrast, local variables must be declared
-    # before use, so the types of local variables will always be
-    # known before they are referenced.
-    for node in self.decl_list:
-      self.variableDeclaration(node)
-    self.logger.print()
+    # Search for expression roots
+    self.search(self.root_node)
 
-  # DECLARATIONS
+  def search (self, node: AstNode):
+    if node.kind == 'ExpressionRoot':
+      self.expressionRoot(node)
+    else:
+      for child_node in node.children:
+        if child_node:
+          self.search(child_node)
 
-  def variableDeclaration (self, node: AstNode):
-    name_node = node.child(0)
-    spec_node = node.child(1)
-    init_node = node.child(2)
-    self.expressionRoot(init_node)
-    spec_node.set_attribute('type', init_node.attribute('type'))
-    symbol: VariableSymbol = name_node.attribute('symbol')
-    symbol.set_type(spec_node.attribute('type'))
+  # EXPRESSIONS
+
+  def expressionRoot (self, node: AstNode):
+    expr_node = node.child()
+    self.expression(expr_node)
+    result = expr_node.attribute('is_constant')
+    node.set_attribute('is_constant', result)
+
+  def expression (self, node: AstNode):
+    # Dispatch method
+    match node.kind:
+      case 'BinaryExpression':
+        self.binaryExpression(node)
+      case 'UnaryExpression':
+        self.unaryExpression(node)
+      case 'Name':
+        self.name(node)
+      case kind if kind in [
+        'BooleanLiteral',
+        'FloatingPointLiteral',
+        'IntegerLiteral'
+      ]:
+        self.literal(node)
+
+  def binaryExpression (self, node: AstNode):
+    left_node  = node.child(0)
+    right_node = node.child(1)
+    self.expression(left_node)
+    self.expression(right_node)
+    result = left_node.attribute('is_constant') and right_node.attribute('is_constant')
+    node.set_attribute('is_constant', result)
+
+  def name (self, node: AstNode):
+    scope: Scope = node.attribute('scope')
+    symbol: VariableSymbol = scope.resolve(node.token.lexeme)
+    result = symbol.constant_flag
+    node.set_attribute('is_constant', result)
+
+  def literal (self, node: AstNode):
+    result = True
+    node.set_attribute('is_constant', result)
+
+  def unaryExpression (self, node: AstNode):
+    expr_node = node.child()
+    self.expression(expr_node)
+    result = expr_node.attribute('is_constant')
+    node.set_attribute('is_constant', result)

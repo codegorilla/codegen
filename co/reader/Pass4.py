@@ -14,30 +14,14 @@ from co.reader import PrimitiveType
 # Purpose:
 
 # This pass isn't run directly. It serves as a parent class that
-# contains shared methods that are called by child classes.
-
-# Compute type expressions for objects (e.g. constants and variables)
-# Compute type expressions for expressions
-# Possibly enforce types, but that might be a third pass
+# contains shared methods that are called by child classes. to help
+# compute type expressions for expressions.
 
 # Notes:
 #
 # 1. In C, global variables must be constants and must be declared
 # before use. In C++, they don't need to be constants, but still need
 # to be declared before use.
-
-B   = PrimitiveType.BOOL.value
-U8  = PrimitiveType.UINT8.value
-U16 = PrimitiveType.UINT16.value
-U32 = PrimitiveType.UINT32.value
-U64 = PrimitiveType.UINT64.value
-I8  = PrimitiveType.INT8.value
-I16 = PrimitiveType.INT16.value
-I32 = PrimitiveType.INT32.value
-I64 = PrimitiveType.INT64.value
-F32 = PrimitiveType.FLOAT32.value
-F64 = PrimitiveType.FLOAT64.value
-X   = None
 
 NULL_T  = PrimitiveType.NULL_T.value
 BOOL    = PrimitiveType.BOOL.value
@@ -52,7 +36,7 @@ INT64   = PrimitiveType.INT64.value
 FLOAT32 = PrimitiveType.FLOAT32.value
 FLOAT64 = PrimitiveType.FLOAT64.value
 
-class Pass5:
+class Pass4:
 
   def __init__ (self, root_node: AstNode):
     self.root_node: AstNode = root_node
@@ -82,7 +66,6 @@ class Pass5:
   # EXPRESSIONS
 
   def expressionRoot (self, node: AstNode):
-    print("Expr root!")
     expr_node = node.child()
     self.expression(expr_node)
     node.set_attribute('type', expr_node.attribute('type'))
@@ -136,24 +119,24 @@ class Pass5:
     # Rule 1: If either operand is of type float64 and the other is
     # of type float32 or integral type, then promote the other to
     # float64.
-    if left_type == F64:
-      if right_type == F32 or right_type in self.integral_types:
+    if left_type == FLOAT64:
+      if right_type == FLOAT32 or right_type in self.integral_types:
         n = self.promoteExpression(right_node, left_type)
         node.set_child(1, n)
       return
-    if right_type == F64:
-      if left_type == F32 or left_type in self.integral_types:
+    if right_type == FLOAT64:
+      if left_type == FLOAT32 or left_type in self.integral_types:
         n = self.promoteExpression(left_node, right_type)
         node.set_child(0, n)
       return
     # Rule 2: If either operand is of type float32 and the other is
     # of integral type, then promote the other to float32.
-    if left_type == F32:
+    if left_type == FLOAT32:
       if right_type in self.integral_types:
         n = self.promoteExpression(right_node, left_type)
         node.set_child(1, n)
       return
-    if right_type == F32:
+    if right_type == FLOAT32:
       if left_type in self.integral_types:
         n = self.promoteExpression(left_node, right_type)
         node.set_child(0, n)
@@ -456,6 +439,8 @@ class Pass5:
     scope: Scope = node.attribute('scope')
     symbol: VariableSymbol = scope.resolve(name)
     if symbol:
+      print(f"The symbol type for {name} is {symbol.type}")
       node.set_attribute('type', symbol.type)
     else:
+      # To do, provide proper error message
       print(f"error: name {name} not declared.")
